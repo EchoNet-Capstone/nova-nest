@@ -1,0 +1,3 @@
+[submodule "nest-old/offline_folium"]
+	path = nest-old/offline_folium
+	url = https://github.com/robintw/offline_folium.git
