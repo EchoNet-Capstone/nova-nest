@@ -1,11 +1,28 @@
 import sys
+import serial
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QMessageBox
 
-# Function to simulate sending a packet over serial
+# Function to send a packet over serial
 def send_packet():
-    # Placeholder for the actual serial communication code
-    print("Packet sent over serial!")
-    QMessageBox.information(None, "Success", "Packet sent successfully!")
+    try:
+        # Configure the serial port
+        serial_port = "/dev/ttys011"  # Update to match your device
+        baud_rate = 9600
+        timeout = 2
+
+        # Open the serial connection
+        with serial.Serial(serial_port, baudrate=baud_rate, timeout=timeout) as ser:
+            # Define the packet to send
+            packet = b"Hello Heltec!\n"  # Update as per your data
+            ser.write(packet)  # Send the packet
+
+            # Provide feedback to the user
+            print("Packet sent over serial!")
+            QMessageBox.information(None, "Success", "Packet sent successfully!")
+
+    except serial.SerialException as e:
+        print(f"Error sending packet: {e}")
+        QMessageBox.critical(None, "Error", f"Failed to send packet:\n{e}")
 
 # Create the main GUI window
 class SerialPacketSender(QWidget):
