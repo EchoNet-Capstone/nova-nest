@@ -35,6 +35,8 @@ source env/bin/activate
 # get python packages
 pip install -r requirements.txt -vvv
 
+pip install pyqt5
+
 # get pyqt requirements using apt
 if [[ ("$OSTYPE" == "linux-gnu"*)]]; then
 	REQUIRED_PKG="python3-pyqt5"
