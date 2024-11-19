@@ -11,47 +11,47 @@ else
 	echo "$REQUIRED_PKG already installed! :)"
 fi
 
-REQUIRED_PKG="qt5-qmake"
-
-PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
-
-echo Checking for $REQUIRED_PKG: $PKG_OK
-if [ "" = "$PKG_OK" ]; then
-	echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
-	sudo apt --yes install $REQUIRED_PKG
-
-	if [ "" == $(echo $PATH | grep qmake)]; then
-		echo "Setting path variable for qmake"
-		export PATH = /usr/bin/qmake:$PATH
-	fi
-else
-	echo "$REQUIRED_PKG already installed! :)"
-fi
+#REQUIRED_PKG="qt6-qmake"
+#
+#PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
+#
+#echo Checking for $REQUIRED_PKG: $PKG_OK
+#if [ "" = "$PKG_OK" ]; then
+#	echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
+#	sudo apt --yes install $REQUIRED_PKG
+#
+#	if [ "" == $(echo $PATH | grep qmake)]; then
+#		echo "Setting path variable for qmake"
+#		export PATH = /usr/bin/qmake:$PATH
+#	fi
+#else
+#	echo "$REQUIRED_PKG already installed! :)"
+#fi
 
 python3 -m venv --clear env
 
 source env/bin/activate
 
 # get python packages
-pip install -r requirements.txt -vvv
+pip install -r requirements.txt
 
-pip install pyqt5
-
+#pip install pyqt6 --config-settings --confirm-license= -vvv
+#
 # get pyqt requirements using apt
-if [[ ("$OSTYPE" == "linux-gnu"*)]]; then
-	REQUIRED_PKG="python3-pyqt5"
-
-	PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
-
-	echo Checking for $REQUIRED_PKG: $PKG_OK
-	if [ "" = "$PKG_OK" ]; then
-		echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
-		sudo apt --yes install $REQUIRED_PKG
-	else
-		echo "$REQUIRED_PKG already installed! :)"
-	fi
-else
-	echo "unsupported os! run on linux (for now)"
-fi
+#if [[ ("$OSTYPE" == "linux-gnu"*)]]; then
+#	REQUIRED_PKG="python3-pyqt6"
+#
+#	PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
+#
+#	echo Checking for $REQUIRED_PKG: $PKG_OK
+#	if [ "" = "$PKG_OK" ]; then
+#		echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
+#		sudo apt --yes install $REQUIRED_PKG
+#	else
+#		echo "$REQUIRED_PKG already installed! :)"
+#	fi
+#else
+#	echo "unsupported os! run on linux (for now)"
+#fi
 
 deactivate

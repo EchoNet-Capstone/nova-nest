@@ -1,6 +1,6 @@
 import sys
 import serial
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QMessageBox
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QMessageBox
 
 # Function to send a packet over serial
 def send_packet():
@@ -53,4 +53,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = SerialPacketSender()
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
