@@ -11,6 +11,23 @@ else
 	echo "$REQUIRED_PKG already installed! :)"
 fi
 
+REQUIRED_PKG="qt5-qmake"
+
+PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
+
+echo Checking for $REQUIRED_PKG: $PKG_OK
+if [ "" = "$PKG_OK" ]; then
+	echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
+	sudo apt --yes install $REQUIRED_PKG
+
+	if [ "" == $(echo $PATH | grep qmake)]; then
+		echo "Setting path variable for qmake"
+		export PATH = /usr/bin/qmake:$PATH
+	fi
+else
+	echo "$REQUIRED_PKG already installed! :)"
+fi
+
 python3 -m venv --clear env
 
 source env/bin/activate
