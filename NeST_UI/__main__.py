@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QMe
 def send_packet():
     try:
         # Configure the serial port
-        serial_port = "/dev/tty.usbserial-0001" # Update to match your device
+        serial_port = "/dev/ttyUSB0" # Update to match your device
         baud_rate = 115200
         timeout = 2
 
