@@ -33,7 +33,7 @@ python3 -m venv --clear env
 source env/bin/activate
 
 # get python packages
-pip install -r requirements.txt
+pip install -r requirements.txt -vvv
 
 # get pyqt requirements using apt
 if [[ ("$OSTYPE" == "linux-gnu"*)]]; then
