@@ -1,6 +1,7 @@
 import sys
 import serial
 from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QMessageBox
+import PyQt6.
 
 # Function to send a packet over serial
 def send_packet():
