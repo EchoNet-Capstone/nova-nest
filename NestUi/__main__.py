@@ -1,5 +1,5 @@
 import sys
-from .GUI import NestMainWindow
+from .Gui import NestMainWindow
 from PySide6.QtWidgets import QApplication
 
 # Run the application
