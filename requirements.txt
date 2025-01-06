@@ -1,0 +1,4 @@
+packaging==24.2
+pycparser==2.22
+pyserial==3.5
+pyqt6==6.7.1
