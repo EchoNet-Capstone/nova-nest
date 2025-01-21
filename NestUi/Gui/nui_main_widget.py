@@ -13,7 +13,7 @@ class NestMainWidget(QWidget):
                 background-color: white;
             }
         """)
-        main_layout.addWidget(burd_map, 3)
+        main_layout.addWidget(burd_map, 4)
         
         burd_status_area = QScrollArea()
         burd_status_area.setWidgetResizable(True)
