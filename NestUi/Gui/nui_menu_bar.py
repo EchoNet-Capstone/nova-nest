@@ -6,8 +6,7 @@ from ..Utils.gui_utils import *
 class NestMenuBar(QMenuBar):
 
     def __init__(self, parent):
-        super().__init__()
-        self.parent = parent
+        super().__init__(parent)
         self.is_fullscreen = False
     
         '''
@@ -31,7 +30,7 @@ class NestMenuBar(QMenuBar):
                 'Exit': 
                     NuiMenuOption(
                         None,
-                        self.parent.close,
+                        self.parent().close,
                         "Ctrl+Q")
             },
             'View':
@@ -86,7 +85,7 @@ class NestMenuBar(QMenuBar):
 
             for menu_opt in curr_menu_order:
                 try:
-                    curr_opt: NuiMenuOption= self.menu_widgets[curr_menu_title][menu_opt]
+                    curr_opt: NuiMenuOption = self.menu_widgets[curr_menu_title][menu_opt]
 
                     curr_opt.action = QAction(menu_opt, curr_menu)
                     
@@ -108,7 +107,7 @@ class NestMenuBar(QMenuBar):
         
         triggered = False
 
-        curr_menu_opt = self.menu_widgets[parent_text][text]
+        curr_menu_opt:NuiMenuOption = self.menu_widgets[parent_text][text]
 
         if curr_menu_opt.widget:
             curr_menu_opt.widget.show()
@@ -123,9 +122,9 @@ class NestMenuBar(QMenuBar):
     
     def toggle_fullscreen(self):
         if self.is_fullscreen:
-            self.parent.showNormal()
+            self.parent().showNormal()
         else:
-            self.parent.showFullScreen()
+            self.parent().showFullScreen()
             
         self.is_fullscreen = not self.is_fullscreen
 
