@@ -25,6 +25,4 @@ class NestMainWidget(QWidget):
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.setMinimumWidth(1200)
-        
         self.setLayout(main_layout)

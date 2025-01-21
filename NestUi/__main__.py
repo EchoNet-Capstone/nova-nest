@@ -12,7 +12,7 @@ if __name__ == "__main__":
 
     main_window = NestMainWindow()
     main_window.setWindowIcon(QIcon("NestUi/Gui/GuiImages/EchoNetLogo.png"))
-    main_window.setMinimumWidth(1200)
+    main_window.setMinimumSize(1280,720)
     main_window.resize(1280,720)
     # main_window.showFullScreen()
     main_window.show()

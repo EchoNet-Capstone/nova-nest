@@ -18,7 +18,7 @@ class NestMenuBar(QMenuBar):
         initialization calls
         '''
         self.menu_widgets = {
-            'File': 
+            'File':  
             {
                 'Save': 
                     NuiMenuOption(
