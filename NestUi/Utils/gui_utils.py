@@ -1,12 +1,12 @@
 from PySide6.QtGui import QAction
-from PySide6.QtCore import QObject, SIGNAL, SLOT
-from PySide6.QtWidgets import QMenu, QWidget, QLabel, QScrollBar
+from PySide6.QtWidgets import QWidget
 
 class NuiMenuOption():
-    def __init__(self, widget, trigger_func, action=None):
+    def __init__(self, widget, trigger_func, shortcut=None):
         self.widget:QWidget = widget
         self.trigger_func = trigger_func
-        self.action:QAction = action
+        self.action:QAction = None
+        self.shortcut = shortcut
 
         if widget:
             self.widget = self.widget()
