@@ -68,7 +68,7 @@ class NestMenuBar(QMenuBar):
             ]),
             ('Help',
             [
-
+                
             ])
         ]
     
