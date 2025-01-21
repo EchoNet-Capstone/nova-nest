@@ -18,29 +18,33 @@ class NestMenuBar(QMenuBar):
         initialization calls
         '''
         self.menu_widgets = {
-                                'File': 
-                                {
-                                    'Save': NuiMenuOption(
-                                                SerialPacketSender, 
-                                                None),
-                                    'Open': NuiMenuOption(
-                                                None,
-                                                None),
-                                    'Exit': NuiMenuOption(
-                                                None,
-                                                self.parent.close,
-                                                "Ctrl+Q")
-                                },
-                                'View':
-                                {
-                                  'Fullscreen' : NuiMenuOption(
-                                                None,
-                                                self.toggle_fullscreen,
-                                                "F11")  
-                                },
-                                'Help':
-                                {}
-                            }
+            'File': 
+            {
+                'Save': 
+                    NuiMenuOption(
+                        SerialPacketSender, 
+                        None),
+                'Open': 
+                    NuiMenuOption(
+                        None,
+                        None),
+                'Exit': 
+                    NuiMenuOption(
+                        None,
+                        self.parent.close,
+                        "Ctrl+Q")
+            },
+            'View':
+            {
+                'Fullscreen' : 
+                    NuiMenuOption(
+                        None,
+                        self.toggle_fullscreen,
+                        "F11")  
+            },
+            'Help':
+            {}
+        }
 
         '''
         Top Level entries are tuples in order from left to right on the displayed
@@ -52,22 +56,22 @@ class NestMenuBar(QMenuBar):
         non-matching key signifiying a separator in the displayed submenu. 
         '''
         self.menu_layout =  [
-                                ('File',
-                                [
-                                    'Save',
-                                    'Open',
-                                    '----',
-                                    'Exit'
-                                ]),
-                                ('View',
-                                [
-                                    'Fullscreen'
-                                ]),
-                                ('Help',
-                                [
+            ('File',
+            [
+                'Save',
+                'Open',
+                '----',
+                'Exit'
+            ]),
+            ('View',
+            [
+                'Fullscreen'
+            ]),
+            ('Help',
+            [
 
-                                ])
-                            ]
+            ])
+        ]
     
         self.init_ui()
 
