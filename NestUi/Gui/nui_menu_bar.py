@@ -7,10 +7,14 @@ class NestMenuBar(QMenuBar):
 
     def __init__(self, parent):
         super().__init__()
+        self.parent = parent
+        self.is_fullscreen = False
 
-        exit_action = QAction("Exit", parent)
+        exit_action = QAction("Exit")
         exit_action.setShortcut("Ctrl+Q")
-        exit_action.triggered.connect(parent.close)
+        
+        toggle_fullscreen_action = QAction("Fullscreen")
+        toggle_fullscreen_action.setShortcut("F11")
     
         '''
         Top Level dictionary contains the menu bar menu title and it's submenu 
@@ -30,8 +34,15 @@ class NestMenuBar(QMenuBar):
                                                 None),
                                     'Exit': NuiMenuOption(
                                                 None,
-                                                None,
+                                                self.parent.close,
                                                 exit_action)
+                                },
+                                'View':
+                                {
+                                  'Fullscreen' : NuiMenuOption(
+                                                None,
+                                                self.toggle_fullscreen,
+                                                toggle_fullscreen_action)  
                                 },
                                 'Help':
                                 {}
@@ -53,6 +64,10 @@ class NestMenuBar(QMenuBar):
                                     'Open',
                                     '----',
                                     'Exit'
+                                ]),
+                                ('View',
+                                [
+                                    'Fullscreen'
                                 ]),
                                 ('Help',
                                 [
@@ -77,6 +92,8 @@ class NestMenuBar(QMenuBar):
 
                     if not curr_opt.action:
                         curr_opt.action = QAction(menu_opt, curr_menu)
+                    else:
+                        curr_opt.action.setParent(curr_menu)
 
                     curr_menu.addAction(curr_opt.action)
 
@@ -100,6 +117,13 @@ class NestMenuBar(QMenuBar):
             curr_menu_opt.trigger_func()
 
         else:
-            print(f'Widget {text} hasn\'t been initialized yet!')
-        
+            print(f'Widget or Action {text} hasn\'t been initialized yet!')
+    
+    def toggle_fullscreen(self):
+        if self.is_fullscreen:
+            self.parent.showNormal()
+        else:
+            self.parent.showFullScreen()
+            
+        self.is_fullscreen = not self.is_fullscreen
 
