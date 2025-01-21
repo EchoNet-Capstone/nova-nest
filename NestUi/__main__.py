@@ -10,6 +10,7 @@ if __name__ == "__main__":
     app.setFont(QFont("Arial", 22))
 
     main_window = NestMainWindow()
+    main_window.resize(1280,720)
     main_window.show()
     
     sys.exit(app.exec())
