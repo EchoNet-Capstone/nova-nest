@@ -5,9 +5,13 @@ from ..Utils.gui_utils import *
 
 class NestMenuBar(QMenuBar):
 
-    def __init__(self):
+    def __init__(self, parent):
         super().__init__()
 
+        exit_action = QAction("Exit", parent)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(parent.close)
+    
         '''
         Top Level dictionary contains the menu bar menu title and it's submenu 
         dictionary
@@ -26,7 +30,8 @@ class NestMenuBar(QMenuBar):
                                                 None),
                                     'Exit': NuiMenuOption(
                                                 None,
-                                                None)
+                                                None,
+                                                exit_action)
                                 },
                                 'Help':
                                 {}
@@ -70,7 +75,8 @@ class NestMenuBar(QMenuBar):
                 try:
                     curr_opt: NuiMenuOption= self.menu_widgets[curr_menu_title][menu_opt]
 
-                    curr_opt.action = QAction(menu_opt, curr_menu)
+                    if not curr_opt.action:
+                        curr_opt.action = QAction(menu_opt, curr_menu)
 
                     curr_menu.addAction(curr_opt.action)
 

@@ -22,5 +22,9 @@ class NestMainWidget(QWidget):
         
         burd_status_area.setWidget(burd_status)
         main_layout.addWidget(burd_status_area, 1)
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.setMinimumWidth(1200)
         
         self.setLayout(main_layout)

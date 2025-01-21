@@ -9,6 +9,6 @@ class NestMainWindow(QMainWindow):
 		self.init_ui()
 		
 	def init_ui(self):
-		self.setMenuBar(NestMenuBar())
+		self.setMenuBar(NestMenuBar(self))
 		self.setCentralWidget(NestMainWidget())
 

@@ -7,12 +7,14 @@ from PySide6.QtWidgets import QApplication
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setApplicationName("BuRD Control Program")
-    app.setWindowIcon(QIcon("./Gui/GuiImages/EchoNetLogo.png"))
+    app.setWindowIcon(QIcon("NestUi/Gui/GuiImages/EchoNetLogo.png"))
     app.setFont(QFont("Arial", 22))
 
     main_window = NestMainWindow()
-    main_window.setWindowIcon(QIcon("./Gui/GuiImages/EchoNetLogo.png"))
+    main_window.setWindowIcon(QIcon("NestUi/Gui/GuiImages/EchoNetLogo.png"))
+    main_window.setMinimumWidth(1200)
     main_window.resize(1280,720)
+    # main_window.showFullScreen()
     main_window.show()
     
     sys.exit(app.exec())
