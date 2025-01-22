@@ -1,12 +1,14 @@
+import folium
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from matplotlib.backends.backend_qt5agg import (
-    FigureCanvasQTAgg as FigureCanvas,
-    NavigationToolbar2QT as NavigationToolbar,
-)
+from PySide6.QtWebChannel import QWebChannel
+from PySide6.QtCore import QObject, Signal
 from ..Utils.nest_map import *
-# Save the map HTML to an in-memory string
 import io
+import os
+
+class MapBridge(QObject):
+    mapClicked = Signal(float, float)  # Signal with latitude and longitude
 
 class GeoMapWidget(QWidget):
     def __init__(self):
@@ -14,29 +16,51 @@ class GeoMapWidget(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        # Set up the layout
         layout = QVBoxLayout()
 
-        # Create a QWebEngineView for displaying interactive maps
+        # Create QWebEngineView
         self.web_view = QWebEngineView()
-        layout.addWidget(self.web_view)
 
-        # Set the layout
+        # Set up the communication bridge
+        self.channel = QWebChannel()
+        self.bridge = MapBridge()
+        self.channel.registerObject("qtChannel", self.bridge)
+        self.web_view.page().setWebChannel(self.channel)
+
+        # Load the map HTML
+        map_html = self.get_html_map()
+        self.web_view.setHtml(map_html)
+
+        # Connect the mapClicked signal to a slot
+        self.bridge.mapClicked.connect(self.on_map_click)
+
+        layout.addWidget(self.web_view)
         self.setLayout(layout)
 
-        # Render the map
-        self.display_map()
+    def on_map_click(self, lat, lng):
+        print(f"Map clicked at: Latitude {lat}, Longitude {lng}")
 
-    def display_map(self):
-        """
-        Generates a folium map using the provided get_map_path_function and displays it in the QWebEngineView.
-        """
-        # Call the function to get the gdf map
-        gdf = get_map()
-        
-        html_file = io.BytesIO()
-        gdf.save(html_file, close_file=False)
-        html_file.seek(0)
+    def get_html_map(self):
+        # Fetch data from EarthRanger
+        gdf = get_earthranger_data()
 
-        # Load the HTML map into the QWebEngineView
-        self.web_view.setHtml(html_file.getvalue().decode())    
+        # Create a folium map
+        folium_map = folium.Map(location=[0, 0], zoom_start=2)
+
+        # Add points to the map
+        for _, row in gdf.iterrows():
+            folium.Marker(
+                location=[row.geometry.y, row.geometry.x],
+                popup=row.get('name', 'No Name')
+            ).add_to(folium_map)
+
+        # Save the map to an HTML string
+        map_html = folium_map._repr_html_()
+
+        # Save to file for debugging or further use
+        file_name = "map.html"
+        with open(file_name, "w", encoding="utf-8") as file:
+            file.write(map_html)
+        print(f"Map HTML saved to {os.path.abspath(file_name)}")
+
+        return map_html
