@@ -5,9 +5,11 @@ from ..Utils.gui_utils import *
 
 class NestMenuBar(QMenuBar):
 
-    def __init__(self):
-        super().__init__()
-
+    def __init__(self, parent):
+        super().__init__(parent)
+        
+        self.is_fullscreen = False
+    
         '''
         Top Level dictionary contains the menu bar menu title and it's submenu 
         dictionary
@@ -16,21 +18,33 @@ class NestMenuBar(QMenuBar):
         initialization calls
         '''
         self.menu_widgets = {
-                                'File': 
-                                {
-                                    'Save': NuiMenuOption(
-                                                SerialPacketSender, 
-                                                None),
-                                    'Open': NuiMenuOption(
-                                                None,
-                                                None),
-                                    'Exit': NuiMenuOption(
-                                                None,
-                                                None)
-                                },
-                                'Help':
-                                {}
-                            }
+            'File':  
+            {
+                'Save': 
+                    NuiMenuOption(
+                        SerialPacketSender, 
+                        None),
+                'Open': 
+                    NuiMenuOption(
+                        None,
+                        None),
+                'Exit': 
+                    NuiMenuOption(
+                        None,
+                        self.parent().close,
+                        "Ctrl+Q")
+            },
+            'View':
+            {
+                'Fullscreen' : 
+                    NuiMenuOption(
+                        None,
+                        self.toggle_fullscreen,
+                        "F11")  
+            },
+            'Help':
+            {}
+        }
 
         '''
         Top Level entries are tuples in order from left to right on the displayed
@@ -42,18 +56,22 @@ class NestMenuBar(QMenuBar):
         non-matching key signifiying a separator in the displayed submenu. 
         '''
         self.menu_layout =  [
-                                ('File',
-                                [
-                                    'Save',
-                                    'Open',
-                                    '----',
-                                    'Exit'
-                                ]),
-                                ('Help',
-                                [
-
-                                ])
-                            ]
+            ('File',
+            [
+                'Save',
+                'Open',
+                '----',
+                'Exit'
+            ]),
+            ('View',
+            [
+                'Fullscreen'
+            ]),
+            ('Help',
+            [
+                
+            ])
+        ]
     
         self.init_ui()
 
@@ -68,9 +86,12 @@ class NestMenuBar(QMenuBar):
 
             for menu_opt in curr_menu_order:
                 try:
-                    curr_opt: NuiMenuOption= self.menu_widgets[curr_menu_title][menu_opt]
+                    curr_opt: NuiMenuOption = self.menu_widgets[curr_menu_title][menu_opt]
 
                     curr_opt.action = QAction(menu_opt, curr_menu)
+                    
+                    if curr_opt.shortcut:
+                        curr_opt.action.setShortcut(curr_opt.shortcut)
 
                     curr_menu.addAction(curr_opt.action)
 
@@ -84,16 +105,27 @@ class NestMenuBar(QMenuBar):
     def menu_clicked(self, action:QAction):
         text = action.text()
         parent_text = action.parent().title()
+        
+        triggered = False
 
-        curr_menu_opt = self.menu_widgets[parent_text][text]
+        curr_menu_opt:NuiMenuOption = self.menu_widgets[parent_text][text]
 
         if curr_menu_opt.widget:
             curr_menu_opt.widget.show()
+            triggered = True
 
-        elif curr_menu_opt.trigger_func:
+        if curr_menu_opt.trigger_func:
             curr_menu_opt.trigger_func()
+            triggered = True
 
+        if not triggered:
+            print(f'Widget or Action {text} hasn\'t been initialized yet!')
+    
+    def toggle_fullscreen(self):
+        if self.is_fullscreen:
+            self.parent().showNormal()
         else:
-            print(f'Widget {text} hasn\'t been initialized yet!')
-        
+            self.parent().showFullScreen()
+            
+        self.is_fullscreen = not self.is_fullscreen
 

@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QMainWindow
 from .nui_serial import *
 from .nui_menu_bar import *
+from .nui_main_widget import *
 
 class NestMainWindow(QMainWindow):
 	def __init__(self):
@@ -8,7 +9,6 @@ class NestMainWindow(QMainWindow):
 		self.init_ui()
 		
 	def init_ui(self):
-		self.setMinimumSize(1280, 720)
+		self.setMenuBar(NestMenuBar(self))
+		self.setCentralWidget(NestMainWidget())
 
-		self.setMenuBar(NestMenuBar())
-		self.centralWidget()
