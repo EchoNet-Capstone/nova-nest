@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# Update Homebrew (for macOS)
+brew update
+
+# Check if Python3 and virtualenv are installed
+REQUIRED_PKG="python3"
+
+if ! command -v $REQUIRED_PKG &> /dev/null
+then
+    echo "$REQUIRED_PKG is not installed. Installing via Homebrew..."
+    brew install python
+else
+    echo "$REQUIRED_PKG already installed! :)"
+fi
+
+# Install system-level dependencies for GeoPandas
+echo "Installing GeoPandas dependencies..."
+brew install gdal geos proj
+
+# Create a Python virtual environment
+python3 -m venv --clear env
+
+# Activate the virtual environment
+source env/bin/activate
+
+# Upgrade pip to the latest version
+pip install --upgrade pip
+
+# Install PySide6 with automatic version matching
+pip install "PySide6" --no-cache-dir || {
+    echo "Failed to install PySide6. Installing a compatible version dynamically..."
+    pip install --no-cache-dir PySide6
+}
+
+# Install pyserial dynamically with version matching
+pip install "pyserial" --no-cache-dir || {
+    echo "Failed to install pyserial. Installing a compatible version dynamically..."
+    pip install --no-cache-dir pyserial
+}
+
+# Install GeoPandas and its dependencies
+echo "Installing GeoPandas and related libraries..."
+pip install geopandas --no-cache-dir || {
+    echo "Failed to install GeoPandas. Retrying with additional options..."
+    pip install --no-cache-dir fiona shapely pyproj rtree
+    pip install geopandas
+}
+
+echo "Installing Folium and related libraries..."
+pip install folium --no-cache-dir || {
+    echo "Failed to install Folium. Retrying with additional options..."
+    pip install --no-cache-dir fiona shapely pyproj rtree
+    pip install folium
+}
+
+echo "Installing Mapclassify and related libraries..."
+pip install mapclassify --no-cache-dir || {
+    echo "Failed to install Folium. Retrying with additional options..."
+    pip install --no-cache-dir fiona shapely pyproj rtree
+    pip install folium
+}
+
+# Install GeoPandas and its dependencies
+echo "Installing GeoDataSets and related libraries..."
+pip install geodatasets --no-cache-dir || {
+    echo "Failed to install GeoDataSets. Retrying with additional options..."
+    pip install --no-cache-dir fiona shapely pyproj rtree
+    pip install geodatasets
+}
+
+echo "Installing Contextily and related libraries..."
+pip install contextily --no-cache-dir || {
+    echo "Failed to install Contexti. Retrying with additional options..."
+    pip install --no-cache-dir fiona shapely pyproj rtree
+    pip install contextily
+}
+
+echo "Installing Matplot and related libraries..."
+pip install matplotlib --no-cache-dir || {
+    echo "Failed to install Matplot. Retrying with additional options..."
+    pip install --no-cache-dir fiona shapely pyproj rtree
+    pip install matplot
+}
+
+echo "Installing EarthRanger..."
+pip install erclient --no-cache-dir
+
+# Deactivate the virtual environment
+deactivate
