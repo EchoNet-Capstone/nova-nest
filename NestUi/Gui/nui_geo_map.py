@@ -11,8 +11,8 @@ class MapBridge(QObject):
     mapClicked = Signal(float, float)  # Signal with latitude and longitude
 
 class NestGeoMapWidget(QWidget):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent):
+        super().__init__(parent)
         self.init_ui()
 
     def init_ui(self):
