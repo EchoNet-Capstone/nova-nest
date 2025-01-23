@@ -1,12 +1,13 @@
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QFrame, QScrollArea
 from .nui_burd_status_main_widget import *
+from .nui_geo_map import *
 
 class NestMainWidget(QWidget):
     def __init__(self):
         super().__init__()
         main_layout = QHBoxLayout(self)
         
-        burd_map = QFrame()
+        burd_map = NestGeoMapWidget()
         burd_map.setStyleSheet("""
             QFrame {
                 border: 2px solid black;
