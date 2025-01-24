@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QMenuBar, QMenu
 from PySide6.QtGui import QAction
 from .nui_serial import *
+from .nui_geo_map import *
 from ..Utils.gui_utils import *
 
 class NestMenuBar(QMenuBar):
@@ -27,6 +28,10 @@ class NestMenuBar(QMenuBar):
                 'Open': 
                     NuiMenuOption(
                         None,
+                        None),
+                'Open Map':
+                    NuiMenuOption(
+                        GeoMapWidget,
                         None),
                 'Exit': 
                     NuiMenuOption(
@@ -60,6 +65,7 @@ class NestMenuBar(QMenuBar):
             [
                 'Save',
                 'Open',
+                'Open Map',
                 '----',
                 'Exit'
             ]),

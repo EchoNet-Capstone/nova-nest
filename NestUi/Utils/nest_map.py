@@ -56,31 +56,50 @@ class EarthRangerClient:
 
 def get_earthranger_data():
     """Fetch data from EarthRanger API and return as a GeoDataFrame."""
-    # Replace with your EarthRanger API credentials and endpoint
-    client = EarthRangerClient(
-        base_url="https://sandbox.pamdas.org/api/v1.0",
-        username="mnoon",
-        password="A8ad74rHPFgbz7P"
-    )
-    
-    # Fetch data
-    events = client.get_events()
-    features = []
+    # Replace with your EarthRanger API credentials and token
+    BASE_URL = "https://ropeless-sandbox.pamdas.org/api/v1.0/activity/events"
+    TOKEN = "duNL2uc2O4DNRBCQNu9swRO5OofEaxFa"  # Replace with your long-lived OAuth2 token
 
-    # Process events into features
-    for event in events.get('results', []):
-        if 'geometry' in event and event['geometry']['type'] == 'Point':
-            coord = event['geometry']['coordinates']
-            features.append({
-                'name': event['type']['name'],  # Include a relevant attribute (e.g., name or type)
-                'geometry': Point(coord[0], coord[1])  # Create a shapely Point object
-            })
+    headers = {
+        "Authorization": f"Bearer {TOKEN}",
+        "Accpet": "application/json",
+        "Content-Disposition": "attachment; filename={}",
+        "Content-Type": "application/json"
+    }
 
-    # Convert to GeoDataFrame
-    if features:
-        gdf = gpd.GeoDataFrame(features, crs="EPSG:4326")
-        return gdf
-    else:
-        print("No valid geometries found in the data.")
-        return gpd.GeoDataFrame()  # Return an empty GeoDataFrame if no valid data
+    try:
+        # Make the GET request to fetch events
+        response = requests.get(BASE_URL, headers=headers)
+        print("Status Code:", response.status_code)
 
+        # Handle errors in response
+        if response.status_code != 200:
+            print(f"Error: {response.status_code} - {response.text}")
+            return gpd.GeoDataFrame()
+
+        # Parse JSON data
+        events = response.json()
+
+        # Extract events with valid geometry
+        features = []
+        for event in events.get('results', []):  # Adjust based on API's pagination structure
+            location = event.get("location")
+            if location and "latitude" in location and "longitude" in location:
+                features.append({
+                    "event_type": event.get("event_type", "Unknown"),
+                    "time": event.get("time"),
+                    "priority": event.get("priority", None),
+                    "geometry": Point(location["longitude"], location["latitude"])
+                })
+
+        # Convert to GeoDataFrame
+        if features:
+            gdf = gpd.GeoDataFrame(features, crs="EPSG:4326")
+            return gdf
+        else:
+            print("No valid geometries found in the data.")
+            return gpd.GeoDataFrame()
+
+    except Exception as e:
+        print("Error fetching data:", str(e))
+        return gpd.GeoDataFrame()
