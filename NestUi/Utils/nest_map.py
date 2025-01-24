@@ -1,6 +1,4 @@
 import geopandas as gpd
-import matplotlib.pyplot as plt
-import contextily as ctx
 import requests
 from shapely.geometry import Point
 

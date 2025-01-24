@@ -1,22 +1,11 @@
 from PySide6.QtWidgets import QWidget, QGridLayout, QLabel, QFrame
 from PySide6.QtCore import Qt
 
+from .StatusWidgets import *
+
 class NestBurdStatusMainWidget(QWidget):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent):
+        super().__init__(parent)
         
         burd_status_layout = QGridLayout(self)
         
-        num_labels = 20
-        # Add labels and separators
-        for i in range(num_labels):
-            label = QLabel(f"Label {i + 1}")
-            label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-            burd_status_layout.addWidget(label)
-
-            # Add a separator after each label (except the last one)
-            if i < num_labels - 1:
-                separator = QFrame()
-                separator.setFrameShape(QFrame.HLine)
-                separator.setFrameShadow(QFrame.Sunken)
-                burd_status_layout.addWidget(separator)

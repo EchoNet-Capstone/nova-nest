@@ -5,6 +5,8 @@ from PySide6.QtWidgets import QApplication
 
 # Run the application
 if __name__ == "__main__":
+    sys.settrace
+    
     app = QApplication(sys.argv)
     app.setApplicationName("BuRD Control Program")
     app.setWindowIcon(QIcon("NestUi/Gui/GuiImages/EchoNetLogo.png"))
