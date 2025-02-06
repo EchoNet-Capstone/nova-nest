@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QFrame, QScrollArea
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QSizePolicy, QScrollArea
 from .nui_burd_status_main_widget import *
 from .nui_geo_map import *
 
@@ -8,12 +8,7 @@ class NestMainWidget(QWidget):
         main_layout = QHBoxLayout(self)
         
         burd_map = NestGeoMapWidget(self)
-        burd_map.setStyleSheet("""
-            QFrame {
-                border: 2px solid black;
-                background-color: white;
-            }
-        """)
+        burd_map.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         main_layout.addWidget(burd_map, 4)
         
         burd_status_area = QScrollArea()
