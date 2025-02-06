@@ -85,6 +85,7 @@ pip install matplotlib --no-cache-dir || {
 
 echo "Installing EarthRanger..."
 pip install erclient --no-cache-dir
+pip install offline_folium --no-cache-dir
 
 # Deactivate the virtual environment
 deactivate
