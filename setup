@@ -1,9 +1,23 @@
 #!/bin/bash
 sudo apt update
 
+REQUIRED_PKG="dos2unix"
+
+PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
+
+echo Checking for $REQUIRED_PKG: $PKG_OK
+if [ "" = "$PKG_OK" ]; then
+	echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
+	sudo apt --yes install $REQUIRED_PKG
+else
+	echo "$REQUIRED_PKG already installed! :)"
+fi
+
+dos2unix required-linux-packages.txt
+
 cat required-linux-packages.txt | while read line 
 do
-   REQUIRED_PKG=$line
+	REQUIRED_PKG=$line
 
 	PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
 
@@ -19,19 +33,29 @@ done
 # check for postgres running
 PG_STATUS=$(sudo service postgresql status|grep "online")
 if [ "" == "$PG_STATUS" ]; then
-	echo "postgresql not started... starting"
+	echo "Postgresql not started... starting"
 	sudo service postgresql start
 else
-	echo "postgresql started! :)"
+	echo "Postgresql started! :)"
 fi
 
-DB_NAME="burd-db"
+DB_NAME="burd_db"
+DB_PASSWORD="burdsFlyAway10"
+PG_USR_EXIST=$(sudo -u postgres psql -c \\du|grep $DB_NAME)
+if [ "" == "$PG_USR_EXIST" ]; then
+	echo "User $DB_NAME not created!... creating user"
+	sudo -u postgres createuser $DB_NAME
+	sudo -u postgres psql -c "ALTER USER $DB_NAME WITH PASSWORD '$DB_PASSWORD';"
+else
+	echo "User $DB_NAME already created! :)"
+fi
+
 PG_DB_EXIST=$(sudo -u postgres psql -c \\l|grep $DB_NAME)
 if [ "" == "$PG_DB_EXIST" ]; then
-	echo "database not created!... creating database"
-	sudo -u postgres createdb -O postgres $DB_NAME
+	echo "Database ($DB_NAME) not created!... creating database"
+	sudo -u postgres createdb -O $DB_NAME $DB_NAME
 else
-	PROMPT="databse found! would you like to reset the current database? [Y\n]"
+	PROMPT="Database ($DB_NAME) found! Would you like to reset the current database?"
 	echo $PROMPT
 	while true; do
 		read -p "Enter Y or n: " input
@@ -43,13 +67,13 @@ else
 	done
 
 	if [ "$input" == "Y" ]; then
-		echo "resetting databse!"
+		echo "Resetting databse ($DB_NAME)!"
 		sudo -u postgres dropdb $DB_NAME
 		sudo -u postgres createdb -O postgres $DB_NAME
 	fi
 fi
 
-echo "postgresql setup complete. setting up python environment"
+echo "Postgresql setup complete. Setting up python environment"
 python3 -m venv --clear env
 
 source env/bin/activate
