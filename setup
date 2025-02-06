@@ -1,30 +1,55 @@
 #!/bin/bash
 sudo apt update
 
-REQUIRED_PKG="python3-venv"
+cat required-linux-packages.txt | while read line 
+do
+   REQUIRED_PKG=$line
 
-PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
+	PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
 
-echo Checking for $REQUIRED_PKG: $PKG_OK
-if [ "" = "$PKG_OK" ]; then
-	echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
-	sudo apt --yes install $REQUIRED_PKG
+	echo Checking for $REQUIRED_PKG: $PKG_OK
+	if [ "" = "$PKG_OK" ]; then
+		echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
+		sudo apt --yes install $REQUIRED_PKG
+	else
+		echo "$REQUIRED_PKG already installed! :)"
+	fi
+done
+
+# check for postgres running
+PG_STATUS=$(sudo service postgresql status|grep "online")
+if [ "" == "$PG_STATUS" ]; then
+	echo "postgresql not started... starting"
+	sudo service postgresql start
 else
-	echo "$REQUIRED_PKG already installed! :)"
+	echo "postgresql started! :)"
 fi
 
-REQUIRED_PKG="python3-qtpy"
-
-PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
-
-echo Checking for $REQUIRED_PKG: $PKG_OK
-if [ "" = "$PKG_OK" ]; then
-	echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
-	sudo apt --yes install $REQUIRED_PKG
+DB_NAME="burd-db"
+PG_DB_EXIST=$(sudo -u postgres psql -c \\l|grep $DB_NAME)
+if [ "" == "$PG_DB_EXIST" ]; then
+	echo "database not created!... creating database"
+	sudo -u postgres createdb -O postgres $DB_NAME
 else
-	echo "$REQUIRED_PKG already installed! :)"
+	PROMPT="databse found! would you like to reset the current database? [Y\n]"
+	echo $PROMPT
+	while true; do
+		read -p "Enter Y or n: " input
+		if [[ "$input" == "Y" || "$input" =~ ^[nN]$ ]]; then
+			break
+		else
+			echo "Invalid input. Please enter Y or n."
+		fi
+	done
+
+	if [ "$input" == "Y" ]; then
+		echo "resetting databse!"
+		sudo -u postgres dropdb $DB_NAME
+		sudo -u postgres createdb -O postgres $DB_NAME
+	fi
 fi
 
+echo "postgresql setup complete. setting up python environment"
 python3 -m venv --clear env
 
 source env/bin/activate

@@ -5,3 +5,4 @@ pyside6==6.7.1
 folium==0.19.4
 geopandas==1.0.1
 matplotlib==3.10.0
+psycopg==3.2.4
