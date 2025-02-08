@@ -1,8 +1,8 @@
-packaging==24.2
-pycparser==2.22
-pyserial==3.5
-pyside6==6.7.1
-folium==0.19.4
-geopandas==1.0.1
-matplotlib==3.10.0
-psycopg==3.2.4
+packaging
+pycparser
+pyserial
+pyside6
+folium
+geopandas
+matplotlib
+psycopg

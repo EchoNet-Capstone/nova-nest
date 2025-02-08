@@ -8,10 +8,11 @@ with psycopg.connect("host=localhost dbname=burd_db user=burd_db password=burdsF
 
         # Execute a command: this creates a new table
         cur.execute("""
-            CREATE TABLE test (
-                id serial PRIMARY KEY,
+            CREATE TABLE test2 (
+                id serial NOT NULL PRIMARY KEY,
                 num integer,
-                data text)
+                data text
+                )
             """)
 
         # Pass data to fill a query placeholders and let Psycopg perform
