@@ -135,19 +135,19 @@ PG_PASS="$SETUP_OUT_DIR/$DB_NAME.pgpass"
 
 DB_PORT=$(sudo -u postgres psql -t -c "SHOW port;" | xargs)
 
-PG_USR_EXIST=$(sudo -u postgres psql -c \\du|grep $DB_USER)
+PG_USR_EXIST=$(sudo -u postgres psql -c \\du|grep "$DB_USER")
 if [ "" == "$PG_USR_EXIST" ]; then
 	verbose_echo "User $DB_USER not created!... creating user"
-	sudo -u postgres createuser $DB_USER
+	sudo -u postgres createuser "$DB_USER"
 	sudo -u postgres psql $GEN_QUIET -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
 	verbose_echo "Setting up .pgpass file..."
-	echo "localhost:$DB_PORT:$DB_NAME:$DB_USER:$DB_PASSWORD" > $PG_PASS
-	chmod 0600 $PG_PASS
+	echo "localhost:$DB_PORT:$DB_NAME:$DB_USER:$DB_PASSWORD" > "$PG_PASS"
+	chmod 0600 "$PG_PASS"
 else
 	verbose_echo "User $DB_USER already created! :)"
 fi
 
-PG_DB_EXIST=$(sudo -u postgres psql -c \\l|grep $DB_NAME)
+PG_DB_EXIST=$(sudo -u postgres psql -c \\l|grep "$DB_NAME")
 CREATE_DB=0
 if [ "" == "$PG_DB_EXIST" ]; then
 	verbose_echo "Database ($DB_NAME) not created!"
@@ -166,16 +166,16 @@ else
 
 	if [ "$input" == "Y" ]; then
 		verbose_echo "Resetting databse ($DB_NAME)!... deleting database"
-		sudo -u postgres dropdb $DB_NAME
+		sudo -u postgres dropdb "$DB_NAME"
 		CREATE_DB=1
 	fi
 fi
 
 if [ $CREATE_DB == 1 ]; then
 	verbose_echo "Creating database..."
-	sudo -u postgres createdb -O $DB_USER $DB_NAME
+	sudo -u postgres createdb -O "$DB_USER" "$DB_NAME"
 	verbose_echo "Setting up database..."
-	PGPASSFILE="$PG_PASS" psql $GEN_QUIET -U $DB_USER -h localhost -d $DB_NAME -f $DB_SETUP_FILE
+	PGPASSFILE="$PG_PASS" psql $GEN_QUIET -U "$DB_USER" -h localhost -d "$DB_NAME" -f $DB_SETUP_FILE
 fi
 
 echo "Setting up python environment..."
