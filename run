@@ -4,10 +4,20 @@ if [[ ! -d "env" ]]; then
 	exit 1
 fi
 
-PG_PASS="setup_out/burd_db.pgpass"
+SETUP_IN_DR="setup_in"
+SETUP_OUT_DIR="setup_out"
+USR_SETUP_FILE="$SETUP_IN_DR/postgres_burd_db_settings.txt"
+
+# setup posgresql server and databse
+DB_USER=$(sed -n '2p' "$USR_SETUP_FILE")
+DB_NAME=$(sed -n '6p' "$USR_SETUP_FILE")
+
+PG_PASS="$SETUP_OUT_DIR/$DB_NAME.pgpass"
+
+NEST_ENV="PGPASSFILE=$PG_PASS BDB_HOST=localhost BDB_USER=$DB_USER BDB_DB=$DB_NAME"
 
 # shellcheck source=/dev/null
 source env/bin/activate
 
-$PG_PASS python3 -m NestUi
+eval "$NEST_ENV python3 -m NestUi"
 deactivate

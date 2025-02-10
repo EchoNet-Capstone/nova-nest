@@ -4,10 +4,11 @@ from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication
 
 from .Gui import NestMainWindow
+from .Utils.nest_db import *
 
 # Run the application
-if __name__ == "__main__":
-    sys.settrace
+if __name__ == "__main__": 
+    test_connect()
     
     app = QApplication(sys.argv)
     app.setApplicationName("BuRD Control Program")
