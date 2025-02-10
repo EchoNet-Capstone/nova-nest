@@ -4,7 +4,10 @@ if [[ ! -d "env" ]]; then
 	exit 1
 fi
 
+PG_PASS="setup_out/burd_db.pgpass"
+
+# shellcheck source=/dev/null
 source env/bin/activate
 
-python3 -m NestUi
+$PG_PASS python3 -m NestUi
 deactivate

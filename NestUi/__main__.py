@@ -1,7 +1,9 @@
 import sys
-from .Gui import NestMainWindow
+import os
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication
+
+from .Gui import NestMainWindow
 
 # Run the application
 if __name__ == "__main__":
