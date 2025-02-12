@@ -1,16 +1,16 @@
 console.log("✅ mapInteractions.js loaded!");
 
 // Function to attach click events to markers
-function attachMarkerEvents() {
+function attachMarkerEvents(mapInstance) {
     console.log("✅ Attaching marker click events...");
 
-    if (typeof map_87504f654c85298218282642e0c45ffb === "undefined") {
+    if (!mapInstance) {
         console.error("❌ ERROR: Map instance is undefined.");
         return;
     }
 
     let markerCount = 0;
-    map_87504f654c85298218282642e0c45ffb.eachLayer(function (layer) {
+    mapInstance.eachLayer(function (layer) {
         if (layer instanceof L.Marker) {
             markerCount++;
             console.log("✅ Marker found:", layer);
@@ -18,9 +18,16 @@ function attachMarkerEvents() {
             layer.on("click", function () {
                 if (layer.getPopup()) {
                     let popupContent = layer.getPopup().getContent();
-                    console.log("Popup Content:", popupContent);
-
-                    let match = popupContent.match(/Buoy ID: (BUOY-\\d+)/);
+                    let contentText = "";
+                    if (typeof popupContent === "string") {
+                        contentText = popupContent;
+                    } else if (popupContent instanceof HTMLElement) {
+                        contentText = popupContent.innerText;
+                    } else {
+                        contentText = String(popupContent);
+                    }
+                    console.log("Popup Content:", contentText);
+                    let match = contentText.match(/Buoy ID: (BUOY-\d+)/);
                     if (match) {
                         let buoyId = match[1];
                         console.log("✅ Clicked Buoy ID:", buoyId);
@@ -36,14 +43,13 @@ function attachMarkerEvents() {
             });
         }
     });
-
-    console.log(`✅ Total Markers Found: ${markerCount}`);
+    console.log("✅ Total Markers Found:", markerCount);
 }
 
-// Run after the document is fully loaded
+// When the document is fully loaded, call attachMarkerEvents with the map instance passed from Python.
 document.addEventListener("readystatechange", function () {
     if (document.readyState === "complete") {
         console.log("✅ Document loaded, running attachMarkerEvents()...");
-        attachMarkerEvents();
+        attachMarkerEvents({{ map_instance }});
     }
 });
