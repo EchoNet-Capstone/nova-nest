@@ -1,0 +1,8 @@
+packaging
+pycparser
+pyserial
+pyside6
+folium
+geopandas
+matplotlib
+psycopg

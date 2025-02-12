@@ -1,60 +1,194 @@
 #!/bin/bash
-sudo apt update
+# Function to print verbose output
+verbose_echo() {
+    if [ $VERBOSE == 1 ]; then
+        echo "$1"
+    fi
+}
 
-cat required-linux-packages.txt | while read line 
-do
-   REQUIRED_PKG=$line
+# Default value for verbose mode (false)
+VERBOSE=0
+APT_QUIET="-qqq"
+GEN_QUIET="--quiet"
 
-	PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
+# Parse command-line arguments for verbose flag
+for arg in "$@"; do
+    case $arg in
+        -v|--verbose)
+        VERBOSE=1
+		APT_QUIET=""
+		GEN_QUIET=""
+        shift
+        ;;
+    esac
+done
 
-	echo Checking for $REQUIRED_PKG: $PKG_OK
+SETUP_IN_DR="setup_in"
+SETUP_OUT_DIR="setup_out"
+REQ_PCKGS_FILE="$SETUP_IN_DR/required_linux_packages.txt"
+POSS_LIBS_FILE="$SETUP_IN_DR/possible_libs_not_found.txt"
+USR_SETUP_FILE="$SETUP_IN_DR/postgres_burd_db_settings.txt"
+DB_SETUP_FILE="$SETUP_IN_DR/burd_db_setup.sql"
+PY_PCKGS_FILE="$SETUP_IN_DR/nestui_py_requirements.txt"
+
+if [ -d "$SETUP_OUT_DIR" ]; then
+	rm -rf $SETUP_OUT_DIR
+fi
+mkdir $SETUP_OUT_DIR
+
+echo "Installing required packages..."
+
+# Make sure we are installing the latest packages
+sudo apt $APT_QUIET update
+
+# Installing dos2unix to make sure required-linux-packages is in the correct format.
+REQUIRED_PKG="dos2unix"
+
+PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
+
+verbose_echo "Checking for $REQUIRED_PKG: $PKG_OK"
+if [ "" = "$PKG_OK" ]; then
+	verbose_echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
+	sudo apt $APT_QUIET --yes install $REQUIRED_PKG
+else
+	verbose_echo "$REQUIRED_PKG already installed! :)"
+fi
+
+dos2unix $GEN_QUIET $REQ_PCKGS_FILE
+dos2unix $GEN_QUIET $POSS_LIBS_FILE
+
+# Install required linux packages
+mapfile -t req_packages < "$REQ_PCKGS_FILE"
+
+for line in "${req_packages[@]}"; do
+	REQUIRED_PKG=$line
+
+	PKG_OK=$(dpkg-query -W --showformat='${Status}\n' "$REQUIRED_PKG"|grep "install ok installed")
+
+	verbose_echo "Checking for $REQUIRED_PKG: $PKG_OK"
 	if [ "" = "$PKG_OK" ]; then
-		echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
-		sudo apt --yes install $REQUIRED_PKG
+		verbose_echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
+		sudo apt --yes install "$REQUIRED_PKG"
 	else
-		echo "$REQUIRED_PKG already installed! :)"
+		verbose_echo "$REQUIRED_PKG already installed! :)"
+	fi
+done 
+
+echo "Checking for possible library naming errors..."
+
+mapfile -t lib_lines < "$POSS_LIBS_FILE"
+
+for line in "${lib_lines[@]}"; do
+	LIB_TO_FIND=$line
+
+	# Get the system architecture
+	SYS_ARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+	# Construct the path to the lib
+	LIBS_DIR="/usr/lib/$SYS_ARCH/"
+
+	# Check if the directory exists
+	LIB_SEARCH=$(find "$LIBS_DIR" -name "${LIB_TO_FIND:0: -2}*")
+	if [ -n "$LIB_SEARCH" ]; then
+		verbose_echo "Base library exists: ${LIB_TO_FIND:0: -2}... checking version"
+		LIB_SEARCH=$(find "$LIBS_DIR" -name "$LIB_TO_FIND")
+
+		if [ -n "$LIB_SEARCH" ]; then
+			verbose_echo "Version matches :)"
+		else
+			verbose_echo "Version doesn't match, trying 1 version higher"
+			LIB_UP_ONE_TO_FIND=${LIB_TO_FIND:0:-1}$((${LIB_TO_FIND: -1} + 1))
+
+			LIB_SEARCH=$(find "$LIBS_DIR" -name "$LIB_UP_ONE_TO_FIND")
+
+			if [ -n "$LIB_SEARCH" ]; then
+				verbose_echo "One version higher found... adding symbolic link."
+				sudo ln "$LIBS_DIR"/"$LIB_UP_ONE_TO_FIND" "$LIBS_DIR"/"$LIB_TO_FIND"
+			else
+				verbose_echo "$LIB_UP_ONE_TO_FIND not found! Check that the base lib (${LIB_TO_FIND:0: -5}) is installed!"
+				exit 1
+			fi
+		fi 
+	else
+		verbose_echo "Base lib ${LIB_TO_FIND:0: -5} not found! Find the package it's included in and add it to $REQ_PCKGS_FILE"
+		exit 1
 	fi
 done
+
+echo "Setting up Posgresql..."
 
 # check for postgres running
 PG_STATUS=$(sudo service postgresql status|grep "online")
 if [ "" == "$PG_STATUS" ]; then
-	echo "postgresql not started... starting"
+	verbose_echo "Postgresql not started... starting"
 	sudo service postgresql start
-else
-	echo "postgresql started! :)"
 fi
 
-DB_NAME="burd-db"
-PG_DB_EXIST=$(sudo -u postgres psql -c \\l|grep $DB_NAME)
-if [ "" == "$PG_DB_EXIST" ]; then
-	echo "database not created!... creating database"
-	sudo -u postgres createdb -O postgres $DB_NAME
+verbose_echo "Postgresql started! :)"
+
+# setup posgresql server and databse
+DB_USER=$(sed -n '2p' "$USR_SETUP_FILE")
+DB_PASSWORD=$(sed -n '4p' "$USR_SETUP_FILE")
+DB_NAME=$(sed -n '6p' "$USR_SETUP_FILE")
+
+PG_PASS="$SETUP_OUT_DIR/$DB_NAME.pgpass"
+
+DB_PORT=$(sudo -u postgres psql -t -c "SHOW port;" | xargs)
+
+PG_USR_EXIST=$(sudo -u postgres psql -c \\du|grep "$DB_USER")
+if [ "" == "$PG_USR_EXIST" ]; then
+	verbose_echo "User $DB_USER not created!... creating user"
+	sudo -u postgres createuser "$DB_USER"
+	sudo -u postgres psql $GEN_QUIET -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
+	verbose_echo "Setting up .pgpass file..."
+	echo "localhost:$DB_PORT:$DB_NAME:$DB_USER:$DB_PASSWORD" > "$PG_PASS"
+	chmod 0600 "$PG_PASS"
 else
-	PROMPT="databse found! would you like to reset the current database? [Y\n]"
-	echo $PROMPT
+	verbose_echo "User $DB_USER already created! :)"
+fi
+
+PG_DB_EXIST=$(sudo -u postgres psql -c \\l|grep "$DB_NAME")
+CREATE_DB=0
+if [ "" == "$PG_DB_EXIST" ]; then
+	verbose_echo "Database ($DB_NAME) not created!"
+	CREATE_DB=1
+else
+	PROMPT="Database ($DB_NAME) found! Would you like to reset the current database?"
+	echo "$PROMPT"
 	while true; do
-		read -p "Enter Y or n: " input
-		if [[ "$input" == "Y" || "$input" =~ ^[nN]$ ]]; then
+		read -rp "Enter \"Y\" or \"n/N\" (default): " input
+		if [[ "$input" == "Y" || "$input" =~ ^[nN]$  || "$input" == "" ]]; then
 			break
 		else
-			echo "Invalid input. Please enter Y or n."
+			verbose_echo "Invalid input. Please enter \"Y\" or \"n/N\."
 		fi
 	done
 
 	if [ "$input" == "Y" ]; then
-		echo "resetting databse!"
-		sudo -u postgres dropdb $DB_NAME
-		sudo -u postgres createdb -O postgres $DB_NAME
+		verbose_echo "Resetting databse ($DB_NAME)!... deleting database"
+		sudo -u postgres dropdb "$DB_NAME"
+		CREATE_DB=1
 	fi
 fi
 
-echo "postgresql setup complete. setting up python environment"
+if [ $CREATE_DB == 1 ]; then
+	verbose_echo "Creating database..."
+	sudo -u postgres createdb -O "$DB_USER" "$DB_NAME"
+	verbose_echo "Setting up database..."
+	PGPASSFILE="$PG_PASS" psql $GEN_QUIET -U "$DB_USER" -h localhost -d "$DB_NAME" -f $DB_SETUP_FILE
+fi
+
+echo "Setting up python environment..."
+
+# Set up python environment
 python3 -m venv --clear env
 
+# shellcheck source=/dev/null
 source env/bin/activate
 
 # get python packages
-pip install -r requirements.txt
+pip install -r $PY_PCKGS_FILE $GEN_QUIET
 
 deactivate
+
+echo "Setup completed! :)"

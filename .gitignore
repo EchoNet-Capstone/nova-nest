@@ -1,6 +1,7 @@
 map.html
 .vscode
 *.code-workspace
+setup_out
 
 #python stuff
 *.pyc
