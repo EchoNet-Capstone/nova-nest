@@ -4,7 +4,7 @@ from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication
 
 from .Gui import NestMainWindow
-from .Utils.nest_db import *
+from .Utils.nest_db.nest_db import *
 
 # Run the application
 if __name__ == "__main__": 

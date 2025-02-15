@@ -6,3 +6,7 @@ setup_out
 #python stuff
 *.pyc
 env
+
+#prisma stuff
+.env
+migrations
