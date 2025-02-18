@@ -146,9 +146,14 @@ if [ "" == "$PG_USR_EXIST" ]; then
 	verbose_echo "User $DB_USER not created!... creating user"
 	sudo -u postgres createuser "$DB_USER"
 	sudo -u postgres psql $GEN_QUIET -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';"
-	sudo -u postgres psql $GEN_QUIET -c "ALTER USER $DB_USER CREATEDB;"
 else
 	verbose_echo "User $DB_USER already created! :)"
+fi
+
+PG_USER_PERM=$(sudo -u postgres psql -t -c \\du|grep "$DB_USER"|grep "Create")
+if [ "" == "$PG_USER_PERM" ]; then
+	verbose_echo "User $DB_USER doesn't have Create DB perms!... adding"
+	sudo -u postgres psql $GEN_QUIET -c "ALTER USER $DB_USER CREATEDB;"
 fi
 
 PG_DB_EXIST=$(sudo -u postgres psql -c \\l|grep "$DB_NAME")
