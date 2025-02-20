@@ -1,0 +1,21 @@
+// database
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// generator
+generator client {
+  provider             = "prisma-client-py"
+  recursive_type_depth = 5
+}
+
+model Buoy {
+	buoy_id Int     @id @default(autoincrement())
+	lat	Float
+	long Float
+	battery Int
+	drop_time DateTime
+	createdAt DateTime @default(now())
+	updatedAt DateTime @updatedAt
+}

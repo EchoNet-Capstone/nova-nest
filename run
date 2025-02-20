@@ -4,20 +4,15 @@ if [[ ! -d "env" ]]; then
 	exit 1
 fi
 
-SETUP_IN_DR="setup_in"
-SETUP_OUT_DIR="setup_out"
-USR_SETUP_FILE="$SETUP_IN_DR/postgres_burd_db_settings.txt"
-
-# setup posgresql server and databse
-DB_USER=$(sed -n '2p' "$USR_SETUP_FILE")
-DB_NAME=$(sed -n '6p' "$USR_SETUP_FILE")
-
-PG_PASS="$SETUP_OUT_DIR/$DB_NAME.pgpass"
-
-NEST_ENV="PGPASSFILE=$PG_PASS BDB_HOST=localhost BDB_USER=$DB_USER BDB_DB=$DB_NAME"
+# check for postgres running
+PG_STATUS=$(sudo service postgresql status|grep "online")
+if [ "" == "$PG_STATUS" ]; then
+	verbose_echo "Postgresql not started... starting"
+	sudo service postgresql start
+fi
 
 # shellcheck source=/dev/null
 source env/bin/activate
 
-eval "$NEST_ENV python3 -m NestUi"
+python3 -m NestUi
 deactivate

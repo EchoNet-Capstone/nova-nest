@@ -5,4 +5,4 @@ pyside6
 folium
 geopandas
 matplotlib
-psycopg
+prisma

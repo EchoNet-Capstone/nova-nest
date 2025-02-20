@@ -4,5 +4,9 @@ map.html
 setup_out
 
 #python stuff
-*.pyc
+__pycache__
 env
+
+#prisma stuff
+.env
+migrations

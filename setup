@@ -6,6 +6,16 @@ verbose_echo() {
     fi
 }
 
+my_prisma() {
+	cd $PROGRAM_DIR
+	CMD="prisma $@"
+	if [ $VERBOSE == 0 ]; then
+		CMD="$CMD > /dev/null"
+	fi
+	eval "$CMD"
+	cd $ROOT_DIR
+}
+
 # Default value for verbose mode (false)
 VERBOSE=0
 APT_QUIET="-qqq"
@@ -18,23 +28,21 @@ for arg in "$@"; do
         VERBOSE=1
 		APT_QUIET=""
 		GEN_QUIET=""
+		PRISMA_QUIET=""
         shift
         ;;
     esac
 done
 
-SETUP_IN_DR="setup_in"
-SETUP_OUT_DIR="setup_out"
+ROOT_DIR=$(pwd)
+PROGRAM_DIR="$ROOT_DIR/NestUi"
+SETUP_IN_DR="$ROOT_DIR/setup_in"
+SETUP_OUT_DIR="$ROOT_DIR/setup_out"
+
 REQ_PCKGS_FILE="$SETUP_IN_DR/required_linux_packages.txt"
 POSS_LIBS_FILE="$SETUP_IN_DR/possible_libs_not_found.txt"
 USR_SETUP_FILE="$SETUP_IN_DR/postgres_burd_db_settings.txt"
-DB_SETUP_FILE="$SETUP_IN_DR/burd_db_setup.sql"
 PY_PCKGS_FILE="$SETUP_IN_DR/nestui_py_requirements.txt"
-
-if [ -d "$SETUP_OUT_DIR" ]; then
-	rm -rf $SETUP_OUT_DIR
-fi
-mkdir $SETUP_OUT_DIR
 
 echo "Installing required packages..."
 
@@ -128,10 +136,8 @@ verbose_echo "Postgresql started! :)"
 
 # setup posgresql server and databse
 DB_USER=$(sed -n '2p' "$USR_SETUP_FILE")
-DB_PASSWORD=$(sed -n '4p' "$USR_SETUP_FILE")
+DB_PASS=$(sed -n '4p' "$USR_SETUP_FILE")
 DB_NAME=$(sed -n '6p' "$USR_SETUP_FILE")
-
-PG_PASS="$SETUP_OUT_DIR/$DB_NAME.pgpass"
 
 DB_PORT=$(sudo -u postgres psql -t -c "SHOW port;" | xargs)
 
@@ -139,12 +145,15 @@ PG_USR_EXIST=$(sudo -u postgres psql -c \\du|grep "$DB_USER")
 if [ "" == "$PG_USR_EXIST" ]; then
 	verbose_echo "User $DB_USER not created!... creating user"
 	sudo -u postgres createuser "$DB_USER"
-	sudo -u postgres psql $GEN_QUIET -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
-	verbose_echo "Setting up .pgpass file..."
-	echo "localhost:$DB_PORT:$DB_NAME:$DB_USER:$DB_PASSWORD" > "$PG_PASS"
-	chmod 0600 "$PG_PASS"
+	sudo -u postgres psql $GEN_QUIET -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';"
 else
 	verbose_echo "User $DB_USER already created! :)"
+fi
+
+PG_USER_PERM=$(sudo -u postgres psql -t -c \\du|grep "$DB_USER"|grep "Create")
+if [ "" == "$PG_USER_PERM" ]; then
+	verbose_echo "User $DB_USER doesn't have Create DB perms!... adding"
+	sudo -u postgres psql $GEN_QUIET -c "ALTER USER $DB_USER CREATEDB;"
 fi
 
 PG_DB_EXIST=$(sudo -u postgres psql -c \\l|grep "$DB_NAME")
@@ -174,8 +183,6 @@ fi
 if [ $CREATE_DB == 1 ]; then
 	verbose_echo "Creating database..."
 	sudo -u postgres createdb -O "$DB_USER" "$DB_NAME"
-	verbose_echo "Setting up database..."
-	PGPASSFILE="$PG_PASS" psql $GEN_QUIET -U "$DB_USER" -h localhost -d "$DB_NAME" -f $DB_SETUP_FILE
 fi
 
 echo "Setting up python environment..."
@@ -188,6 +195,26 @@ source env/bin/activate
 
 # get python packages
 pip install -r $PY_PCKGS_FILE $GEN_QUIET
+
+echo "Setting up prisma..."
+
+DOT_ENV_FILE="$PROGRAM_DIR/.env"
+
+verbose_echo "Setting up .env file..."
+echo "DATABASE_URL=\"postgresql://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME?schema=public\"" > $DOT_ENV_FILE
+
+my_prisma generate
+
+MIGRATIONS_DIR="$PROGRAM_DIR/prisma/migrations"
+
+if [ $CREATE_DB == 1 ]; then
+	if [ -d $MIGRATIONS_DIR ]; then
+		verbose_echo "Removing migrations directory..."
+		rm -rf "$MIGRATIONS_DIR"
+	fi
+	verbose_echo "Migrating with prisma..."
+	my_prisma migrate dev --name init
+fi
 
 deactivate
 
