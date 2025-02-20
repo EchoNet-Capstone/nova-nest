@@ -2,14 +2,15 @@ import sys
 import os
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication
+import asyncio
+from dotenv import load_dotenv, dotenv_values
+from prisma import *
 
 from .Gui import NestMainWindow
 from .Utils.nest_db import *
 
 # Run the application
-if __name__ == "__main__": 
-    test_connect()
-    
+if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setApplicationName("BuRD Control Program")
     app.setWindowIcon(QIcon("NestUi/Gui/GuiImages/EchoNetLogo.png"))
