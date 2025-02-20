@@ -3,24 +3,456 @@
 &lt;head&gt;
     
     &lt;meta http-equiv=&quot;content-type&quot; content=&quot;text/html; charset=UTF-8&quot; /&gt;
-    &lt;script&gt;console.log(&quot;✅ mapInteractions.js loaded!&quot;);
+    &lt;script&gt; /****************************************************************************
+  **
+  ** Copyright (C) 2016 The Qt Company Ltd.
+  ** Copyright (C) 2014 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com, author Milian Wolff &lt;milian.wolff@kdab.com&gt;
+  ** Contact: https://www.qt.io/licensing/
+  **
+  ** This file is part of the QtWebChannel module of the Qt Toolkit.
+  **
+  ** $QT_BEGIN_LICENSE:BSD$
+  ** Commercial License Usage
+  ** Licensees holding valid commercial Qt licenses may use this file in
+  ** accordance with the commercial license agreement provided with the
+  ** Software or, alternatively, in accordance with the terms contained in
+  ** a written agreement between you and The Qt Company. For licensing terms
+  ** and conditions see https://www.qt.io/terms-conditions. For further
+  ** information use the contact form at https://www.qio/contact-us.
+  **
+  ** BSD License Usage
+  ** Alternatively, you may use this file under the terms of the BSD license
+  ** as follows:
+  **
+  ** &quot;Redistribution and use in source and binary forms, with or without
+  ** modification, are permitted provided that the following conditions are
+  ** met:
+  **   * Redistributions of source code must retain the above copyright
+  **     notice, this list of conditions and the following disclaimer.
+  **   * Redistributions in binary form must reproduce the above copyright
+  **     notice, this list of conditions and the following disclaimer in
+  **     the documentation and/or other materials provided with the
+  **     distribution.
+  **   * Neither the name of The Qt Company Ltd nor the names of its
+  **     contributors may be used to endorse or promote products derived
+  **     from this software without specific prior written permission.
+  **
+  **
+  ** THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+  ** &quot;AS IS&quot; AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+  ** LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+  ** A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+  ** OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+  ** SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+  ** LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+  ** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+  ** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  ** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  ** OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.&quot;
+  **
+  ** $QT_END_LICENSE$
+  **
+  ****************************************************************************/
 
+  &quot;use strict&quot;;
+
+  var QWebChannelMessageTypes = {
+      signal: 1,
+      propertyUpdate: 2,
+      init: 3,
+      idle: 4,
+      debug: 5,
+      invokeMethod: 6,
+      connectToSignal: 7,
+      disconnectFromSignal: 8,
+      setProperty: 9,
+      response: 10,
+  };
+
+  var QWebChannel = function(transport, initCallback)
+  {
+      if (typeof transport !== &quot;object&quot; || typeof transport.send !== &quot;function&quot;) {
+          console.error(&quot;The QWebChannel expects a transport object with a send function and onmessage callback property.&quot; +
+                        &quot; Given is: transport: &quot; + typeof(transport) + &quot;, transport.send: &quot; + typeof(transport.send));
+          return;
+      }
+
+      var channel = this;
+      this.transport = transport;
+
+      this.send = function(data)
+      {
+          if (typeof(data) !== &quot;string&quot;) {
+              data = JSON.stringify(data);
+          }
+          channel.transport.send(data);
+      }
+
+      this.transport.onmessage = function(message)
+      {
+          var data = message.data;
+          if (typeof data === &quot;string&quot;) {
+              data = JSON.parse(data);
+          }
+          switch (data.type) {
+              case QWebChannelMessageTypes.signal:
+                  channel.handleSignal(data);
+                  break;
+              case QWebChannelMessageTypes.response:
+                  channel.handleResponse(data);
+                  break;
+              case QWebChannelMessageTypes.propertyUpdate:
+                  channel.handlePropertyUpdate(data);
+                  break;
+              default:
+                  console.error(&quot;invalid message received:&quot;, message.data);
+                  break;
+          }
+      }
+
+      this.execCallbacks = {};
+      this.execId = 0;
+      this.exec = function(data, callback)
+      {
+          if (!callback) {
+              // if no callback is given, send directly
+              channel.send(data);
+              return;
+          }
+          if (channel.execId === Number.MAX_VALUE) {
+              // wrap
+              channel.execId = Number.MIN_VALUE;
+          }
+          if (data.hasOwnProperty(&quot;id&quot;)) {
+              console.error(&quot;Cannot exec message with property id: &quot; + JSON.stringify(data));
+              return;
+          }
+          data.id = channel.execId++;
+          channel.execCallbacks[data.id] = callback;
+          channel.send(data);
+      };
+
+      this.objects = {};
+
+      this.handleSignal = function(message)
+      {
+          var object = channel.objects[message.object];
+          if (object) {
+              object.signalEmitted(message.signal, message.args);
+          } else {
+              console.warn(&quot;Unhandled signal: &quot; + message.object + &quot;::&quot; + message.signal);
+          }
+      }
+
+      this.handleResponse = function(message)
+      {
+          if (!message.hasOwnProperty(&quot;id&quot;)) {
+              console.error(&quot;Invalid response message received: &quot;, JSON.stringify(message));
+              return;
+          }
+          channel.execCallbacks[message.id](message.data);
+          delete channel.execCallbacks[message.id];
+      }
+
+      this.handlePropertyUpdate = function(message)
+      {
+          for (var i in message.data) {
+              var data = message.data[i];
+              var object = channel.objects[data.object];
+              if (object) {
+                  object.propertyUpdate(data.signals, data.properties);
+              } else {
+                  console.warn(&quot;Unhandled property update: &quot; + data.object + &quot;::&quot; + data.signal);
+              }
+          }
+          channel.exec({type: QWebChannelMessageTypes.idle});
+      }
+
+      this.debug = function(message)
+      {
+          channel.send({type: QWebChannelMessageTypes.debug, data: message});
+      };
+
+      channel.exec({type: QWebChannelMessageTypes.init}, function(data) {
+          for (var objectName in data) {
+              var object = new QObject(objectName, data[objectName], channel);
+          }
+          // now unwrap properties, which might reference other registered objects
+          for (var objectName in channel.objects) {
+              channel.objects[objectName].unwrapProperties();
+          }
+          if (initCallback) {
+              initCallback(channel);
+          }
+          channel.exec({type: QWebChannelMessageTypes.idle});
+      });
+  };
+
+  function QObject(name, data, webChannel)
+  {
+      this.__id__ = name;
+      webChannel.objects[name] = this;
+
+      // List of callbacks that get invoked upon signal emission
+      this.__objectSignals__ = {};
+
+      // Cache of all properties, updated when a notify signal is emitted
+      this.__propertyCache__ = {};
+
+      var object = this;
+
+      // ----------------------------------------------------------------------
+
+      this.unwrapQObject = function(response)
+      {
+          if (response instanceof Array) {
+              // support list of objects
+              var ret = new Array(response.length);
+              for (var i = 0; i &lt; response.length; ++i) {
+                  ret[i] = object.unwrapQObject(response[i]);
+              }
+              return ret;
+          }
+          if (!response
+              || !response[&quot;__QObject*__&quot;]
+              || response.id === undefined) {
+              return response;
+          }
+
+          var objectId = response.id;
+          if (webChannel.objects[objectId])
+              return webChannel.objects[objectId];
+
+          if (!response.data) {
+              console.error(&quot;Cannot unwrap unknown QObject &quot; + objectId + &quot; without data.&quot;);
+              return;
+          }
+
+          var qObject = new QObject( objectId, response.data, webChannel );
+          qObject.destroyed.connect(function() {
+              if (webChannel.objects[objectId] === qObject) {
+                  delete webChannel.objects[objectId];
+                  // reset the now deleted QObject to an empty {} object
+                  // just assigning {} though would not have the desired effect, but the
+                  // below also ensures all external references will see the empty map
+                  // NOTE: this detour is necessary to workaround QTBUG-40021
+                  var propertyNames = [];
+                  for (var propertyName in qObject) {
+                      propertyNames.push(propertyName);
+                  }
+                  for (var idx in propertyNames) {
+                      delete qObject[propertyNames[idx]];
+                  }
+              }
+          });
+          // here we are already initialized, and thus must directly unwrap the properties
+          qObject.unwrapProperties();
+          return qObject;
+      }
+
+      this.unwrapProperties = function()
+      {
+          for (var propertyIdx in object.__propertyCache__) {
+              object.__propertyCache__[propertyIdx] = object.unwrapQObject(object.__propertyCache__[propertyIdx]);
+          }
+      }
+
+      function addSignal(signalData, isPropertyNotifySignal)
+      {
+          var signalName = signalData[0];
+          var signalIndex = signalData[1];
+          object[signalName] = {
+              connect: function(callback) {
+                  if (typeof(callback) !== &quot;function&quot;) {
+                      console.error(&quot;Bad callback given to connect to signal &quot; + signalName);
+                      return;
+                  }
+
+                  object.__objectSignals__[signalIndex] = object.__objectSignals__[signalIndex] || [];
+                  object.__objectSignals__[signalIndex].push(callback);
+
+                  if (!isPropertyNotifySignal &amp;&amp; signalName !== &quot;destroyed&quot;) {
+                      // only required for &quot;pure&quot; signals, handled separately for properties in propertyUpdate
+                      // also note that we always get notified about the destroyed signal
+                      webChannel.exec({
+                          type: QWebChannelMessageTypes.connectToSignal,
+                          object: object.__id__,
+                          signal: signalIndex
+                      });
+                  }
+              },
+              disconnect: function(callback) {
+                  if (typeof(callback) !== &quot;function&quot;) {
+                      console.error(&quot;Bad callback given to disconnect from signal &quot; + signalName);
+                      return;
+                  }
+                  object.__objectSignals__[signalIndex] = object.__objectSignals__[signalIndex] || [];
+                  var idx = object.__objectSignals__[signalIndex].indexOf(callback);
+                  if (idx === -1) {
+                      console.error(&quot;Cannot find connection of signal &quot; + signalName + &quot; to &quot; + callback.name);
+                      return;
+                  }
+                  object.__objectSignals__[signalIndex].splice(idx, 1);
+                  if (!isPropertyNotifySignal &amp;&amp; object.__objectSignals__[signalIndex].length === 0) {
+                      // only required for &quot;pure&quot; signals, handled separately for properties in propertyUpdate
+                      webChannel.exec({
+                          type: QWebChannelMessageTypes.disconnectFromSignal,
+                          object: object.__id__,
+                          signal: signalIndex
+                      });
+                  }
+              }
+          };
+      }
+
+      /**
+       * Invokes all callbacks for the given signalname. Also works for property notify callbacks.
+       */
+      function invokeSignalCallbacks(signalName, signalArgs)
+      {
+          var connections = object.__objectSignals__[signalName];
+          if (connections) {
+              connections.forEach(function(callback) {
+                  callback.apply(callback, signalArgs);
+              });
+          }
+      }
+
+      this.propertyUpdate = function(signals, propertyMap)
+      {
+          // update property cache
+          for (var propertyIndex in propertyMap) {
+              var propertyValue = propertyMap[propertyIndex];
+              object.__propertyCache__[propertyIndex] = propertyValue;
+          }
+
+          for (var signalName in signals) {
+              // Invoke all callbacks, as signalEmitted() does not. This ensures the
+              // property cache is updated before the callbacks are invoked.
+              invokeSignalCallbacks(signalName, signals[signalName]);
+          }
+      }
+
+      this.signalEmitted = function(signalName, signalArgs)
+      {
+          invokeSignalCallbacks(signalName, signalArgs);
+      }
+
+      function addMethod(methodData)
+      {
+          var methodName = methodData[0];
+          var methodIdx = methodData[1];
+          object[methodName] = function() {
+              var args = [];
+              var callback;
+              for (var i = 0; i &lt; arguments.length; ++i) {
+                  if (typeof arguments[i] === &quot;function&quot;)
+                      callback = arguments[i];
+                  else
+                      args.push(arguments[i]);
+              }
+
+              webChannel.exec({
+                  &quot;type&quot;: QWebChannelMessageTypes.invokeMethod,
+                  &quot;object&quot;: object.__id__,
+                  &quot;method&quot;: methodIdx,
+                  &quot;args&quot;: args
+              }, function(response) {
+                  if (response !== undefined) {
+                      var result = object.unwrapQObject(response);
+                      if (callback) {
+                          (callback)(result);
+                      }
+                  }
+              });
+          };
+      }
+
+      function bindGetterSetter(propertyInfo)
+      {
+          var propertyIndex = propertyInfo[0];
+          var propertyName = propertyInfo[1];
+          var notifySignalData = propertyInfo[2];
+          // initialize property cache with current value
+          // NOTE: if this is an object, it is not directly unwrapped as it might
+          // reference other QObject that we do not know yet
+          object.__propertyCache__[propertyIndex] = propertyInfo[3];
+
+          if (notifySignalData) {
+              if (notifySignalData[0] === 1) {
+                  // signal name is optimized away, reconstruct the actual name
+                  notifySignalData[0] = propertyName + &quot;Changed&quot;;
+              }
+              addSignal(notifySignalData, true);
+          }
+
+          Object.defineProperty(object, propertyName, {
+              configurable: true,
+              get: function () {
+                  var propertyValue = object.__propertyCache__[propertyIndex];
+                  if (propertyValue === undefined) {
+                      // This shouldn&#x27;t happen
+                      console.warn(&quot;Undefined value in property cache for property \&quot;&quot; + propertyName + &quot;\&quot; in object &quot; + object.__id__);
+                  }
+
+                  return propertyValue;
+              },
+              set: function(value) {
+                  if (value === undefined) {
+                      console.warn(&quot;Property setter for &quot; + propertyName + &quot; called with undefined value!&quot;);
+                      return;
+                  }
+                  object.__propertyCache__[propertyIndex] = value;
+                  webChannel.exec({
+                      &quot;type&quot;: QWebChannelMessageTypes.setProperty,
+                      &quot;object&quot;: object.__id__,
+                      &quot;property&quot;: propertyIndex,
+                      &quot;value&quot;: value
+                  });
+              }
+          });
+
+      }
+
+      // ----------------------------------------------------------------------
+
+      data.methods.forEach(addMethod);
+
+      data.properties.forEach(bindGetterSetter);
+
+      data.signals.forEach(function(signal) { addSignal(signal, false); });
+
+      for (var name in data.enums) {
+          object[name] = data.enums[name];
+      }
+  }
+
+  //required for use with nodejs
+  if (typeof module === &#x27;object&#x27;) {
+      module.exports = {
+          QWebChannel: QWebChannel
+      };
+  }
+
+var mapbridge = null;
+new QWebChannel(qt.webChannelTransport, function(channel) {
+    mapbridge = channel.objects.mapbridge;
+});
+&lt;/script&gt;
+    &lt;script&gt;
 // Function to attach click events to markers
 function attachMarkerEvents(mapInstance) {
     console.log(&quot;✅ Attaching marker click events...&quot;);
-
     if (!mapInstance) {
         console.error(&quot;❌ ERROR: Map instance is undefined.&quot;);
         return;
     }
-
     let markerCount = 0;
-    mapInstance.eachLayer(function (layer) {
+    mapInstance.eachLayer(function(layer) {
         if (layer instanceof L.Marker) {
             markerCount++;
             console.log(&quot;✅ Marker found:&quot;, layer);
-
-            layer.on(&quot;click&quot;, function () {
+            layer.on(&quot;click&quot;, function() {
                 if (layer.getPopup()) {
                     let popupContent = layer.getPopup().getContent();
                     let contentText = &quot;&quot;;
@@ -37,9 +469,9 @@ function attachMarkerEvents(mapInstance) {
                         let buoyId = match[1];
                         console.log(&quot;✅ Clicked Buoy ID:&quot;, buoyId);
                         alert(&quot;Buoy Clicked: &quot; + buoyId);
-                        if (window.qtChannel) {
+                        if (mapbridge) {
                             console.log(&quot;✅ Sending Buoy ID to PyQt&quot;);
-                            window.qtChannel.markerClicked.emit(buoyId);
+                            mapbridge.markerClicked.emit(buoyId);
                         } else {
                             console.log(&quot;❌ Qt WebChannel not found!&quot;);
                         }
@@ -51,11 +483,11 @@ function attachMarkerEvents(mapInstance) {
     console.log(&quot;✅ Total Markers Found:&quot;, markerCount);
 }
 
-// When the document is fully loaded, call attachMarkerEvents with the map instance passed from Python.
+
+//Optionally, if you need to run attachMarkerEvents without waiting for QWebChannel (for debugging)
 document.addEventListener(&quot;readystatechange&quot;, function () {
     if (document.readyState === &quot;complete&quot;) {
-        console.log(&quot;✅ Document loaded, running attachMarkerEvents()...&quot;);
-        attachMarkerEvents(map_3d4316bdf9808d9b466078bc009b1b01);
+        attachMarkerEvents(map_53f7f331f2847c80e018908eb16d43f6);
     }
 });&lt;/script&gt;
     
@@ -80,7 +512,7 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
             &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,
                 initial-scale=1.0, maximum-scale=1.0, user-scalable=no&quot; /&gt;
             &lt;style&gt;
-                #map_3d4316bdf9808d9b466078bc009b1b01 {
+                #map_53f7f331f2847c80e018908eb16d43f6 {
                     position: relative;
                     width: 100.0%;
                     height: 100.0%;
@@ -96,14 +528,14 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
 &lt;body&gt;
     
     
-            &lt;div class=&quot;folium-map&quot; id=&quot;map_3d4316bdf9808d9b466078bc009b1b01&quot; &gt;&lt;/div&gt;
+            &lt;div class=&quot;folium-map&quot; id=&quot;map_53f7f331f2847c80e018908eb16d43f6&quot; &gt;&lt;/div&gt;
         
 &lt;/body&gt;
 &lt;script&gt;
     
     
-            var map_3d4316bdf9808d9b466078bc009b1b01 = L.map(
-                &quot;map_3d4316bdf9808d9b466078bc009b1b01&quot;,
+            var map_53f7f331f2847c80e018908eb16d43f6 = L.map(
+                &quot;map_53f7f331f2847c80e018908eb16d43f6&quot;,
                 {
                     center: [0.0, 0.0],
                     crs: L.CRS.EPSG3857,
@@ -120,7 +552,7 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
 
         
     
-            var tile_layer_03b57193a24b2cbf36d800d8eae6f61a = L.tileLayer(
+            var tile_layer_c15c0bcdd704188553ba7359c045bf9a = L.tileLayer(
                 &quot;https://tile.openstreetmap.org/{z}/{x}/{y}.png&quot;,
                 {
   &quot;minZoom&quot;: 0,
@@ -137,10 +569,10 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
             );
         
     
-            tile_layer_03b57193a24b2cbf36d800d8eae6f61a.addTo(map_3d4316bdf9808d9b466078bc009b1b01);
+            tile_layer_c15c0bcdd704188553ba7359c045bf9a.addTo(map_53f7f331f2847c80e018908eb16d43f6);
         
     
-            var tile_layer_e21962c1bec1a8e9c677b8c411ccb0b4 = L.tileLayer(
+            var tile_layer_6191cf4ce27c7d2cef6a7567ffab8717 = L.tileLayer(
                 &quot;https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png&quot;,
                 {
   &quot;minZoom&quot;: 0,
@@ -157,10 +589,10 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
             );
         
     
-            tile_layer_e21962c1bec1a8e9c677b8c411ccb0b4.addTo(map_3d4316bdf9808d9b466078bc009b1b01);
+            tile_layer_6191cf4ce27c7d2cef6a7567ffab8717.addTo(map_53f7f331f2847c80e018908eb16d43f6);
         
     
-            var mouse_position_523a1b45d81ca22ab5a0bd34e639fae3 = new L.Control.MousePosition(
+            var mouse_position_69fec56d9b83b1ef1c524423b6564ea0 = new L.Control.MousePosition(
                 {
   &quot;position&quot;: &quot;bottomright&quot;,
   &quot;separator&quot;: &quot;, &quot;,
@@ -170,38 +602,38 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
   &quot;prefix&quot;: &quot;Coordinates:&quot;,
 }
             );
-            mouse_position_523a1b45d81ca22ab5a0bd34e639fae3.options[&quot;latFormatter&quot;] =
+            mouse_position_69fec56d9b83b1ef1c524423b6564ea0.options[&quot;latFormatter&quot;] =
                 undefined;
-            mouse_position_523a1b45d81ca22ab5a0bd34e639fae3.options[&quot;lngFormatter&quot;] =
+            mouse_position_69fec56d9b83b1ef1c524423b6564ea0.options[&quot;lngFormatter&quot;] =
                 undefined;
-            map_3d4316bdf9808d9b466078bc009b1b01.addControl(mouse_position_523a1b45d81ca22ab5a0bd34e639fae3);
+            map_53f7f331f2847c80e018908eb16d43f6.addControl(mouse_position_69fec56d9b83b1ef1c524423b6564ea0);
         
     
-            var marker_8ee521d6401c580c712d41f33d268201 = L.marker(
-                [39.80038725838574, -120.48762287895555],
+            var marker_086ba0edc8503114719fa07143c15101 = L.marker(
+                [39.93011909585849, -120.74032725770455],
                 {
 }
-            ).addTo(map_3d4316bdf9808d9b466078bc009b1b01);
+            ).addTo(map_53f7f331f2847c80e018908eb16d43f6);
         
     
-        var popup_1ecab92255760afd3fe18d90d7b4b745 = L.popup({
+        var popup_ee594a50079ed7a8282111e7f744cb04 = L.popup({
   &quot;maxWidth&quot;: &quot;100%&quot;,
 });
 
         
             
-                var html_a6d755aefa18abf9dd9a6dfe1859d221 = $(`&lt;div id=&quot;html_a6d755aefa18abf9dd9a6dfe1859d221&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-1&lt;/div&gt;`)[0];
-                popup_1ecab92255760afd3fe18d90d7b4b745.setContent(html_a6d755aefa18abf9dd9a6dfe1859d221);
+                var html_15411a27cdbbec6110834f5f9a00fed4 = $(`&lt;div id=&quot;html_15411a27cdbbec6110834f5f9a00fed4&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-1&lt;/div&gt;`)[0];
+                popup_ee594a50079ed7a8282111e7f744cb04.setContent(html_15411a27cdbbec6110834f5f9a00fed4);
             
         
 
-        marker_8ee521d6401c580c712d41f33d268201.bindPopup(popup_1ecab92255760afd3fe18d90d7b4b745)
+        marker_086ba0edc8503114719fa07143c15101.bindPopup(popup_ee594a50079ed7a8282111e7f744cb04)
         ;
 
         
     
     
-            marker_8ee521d6401c580c712d41f33d268201.bindTooltip(
+            marker_086ba0edc8503114719fa07143c15101.bindTooltip(
                 `&lt;div&gt;
                      Click for details
                  &lt;/div&gt;`,
@@ -211,31 +643,31 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
             );
         
     
-            var marker_1e583524c84f60d9cf4dc6fae0a81eee = L.marker(
-                [39.55771748388093, -120.11333186764755],
+            var marker_550ce2f3e781d3279834a69e8461c632 = L.marker(
+                [39.95929851980996, -120.62984024010336],
                 {
 }
-            ).addTo(map_3d4316bdf9808d9b466078bc009b1b01);
+            ).addTo(map_53f7f331f2847c80e018908eb16d43f6);
         
     
-        var popup_10240c970028cb58ece79f7b12553d91 = L.popup({
+        var popup_852445e7de3dd677abb9a58104627a39 = L.popup({
   &quot;maxWidth&quot;: &quot;100%&quot;,
 });
 
         
             
-                var html_857dd396c84466fbf57788068415086f = $(`&lt;div id=&quot;html_857dd396c84466fbf57788068415086f&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-2&lt;/div&gt;`)[0];
-                popup_10240c970028cb58ece79f7b12553d91.setContent(html_857dd396c84466fbf57788068415086f);
+                var html_e96260b4b472a8bf3036b7bf9012b568 = $(`&lt;div id=&quot;html_e96260b4b472a8bf3036b7bf9012b568&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-2&lt;/div&gt;`)[0];
+                popup_852445e7de3dd677abb9a58104627a39.setContent(html_e96260b4b472a8bf3036b7bf9012b568);
             
         
 
-        marker_1e583524c84f60d9cf4dc6fae0a81eee.bindPopup(popup_10240c970028cb58ece79f7b12553d91)
+        marker_550ce2f3e781d3279834a69e8461c632.bindPopup(popup_852445e7de3dd677abb9a58104627a39)
         ;
 
         
     
     
-            marker_1e583524c84f60d9cf4dc6fae0a81eee.bindTooltip(
+            marker_550ce2f3e781d3279834a69e8461c632.bindTooltip(
                 `&lt;div&gt;
                      Click for details
                  &lt;/div&gt;`,
@@ -245,31 +677,31 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
             );
         
     
-            var marker_36c7c7b6d699861ce9acb7ca3e825c5a = L.marker(
-                [39.977131825569224, -120.65381342774783],
+            var marker_62a979db55c0e7e4f75971e00b398848 = L.marker(
+                [39.5016008599755, -120.57472524509788],
                 {
 }
-            ).addTo(map_3d4316bdf9808d9b466078bc009b1b01);
+            ).addTo(map_53f7f331f2847c80e018908eb16d43f6);
         
     
-        var popup_3a689c682473513f3f6b71e3db477dc3 = L.popup({
+        var popup_24450cf4955de29ac37adba7f188081b = L.popup({
   &quot;maxWidth&quot;: &quot;100%&quot;,
 });
 
         
             
-                var html_0f337c99ef857bb47d8e588dc5c645f7 = $(`&lt;div id=&quot;html_0f337c99ef857bb47d8e588dc5c645f7&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-3&lt;/div&gt;`)[0];
-                popup_3a689c682473513f3f6b71e3db477dc3.setContent(html_0f337c99ef857bb47d8e588dc5c645f7);
+                var html_fc16ae179686623bb58df7069a210266 = $(`&lt;div id=&quot;html_fc16ae179686623bb58df7069a210266&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-3&lt;/div&gt;`)[0];
+                popup_24450cf4955de29ac37adba7f188081b.setContent(html_fc16ae179686623bb58df7069a210266);
             
         
 
-        marker_36c7c7b6d699861ce9acb7ca3e825c5a.bindPopup(popup_3a689c682473513f3f6b71e3db477dc3)
+        marker_62a979db55c0e7e4f75971e00b398848.bindPopup(popup_24450cf4955de29ac37adba7f188081b)
         ;
 
         
     
     
-            marker_36c7c7b6d699861ce9acb7ca3e825c5a.bindTooltip(
+            marker_62a979db55c0e7e4f75971e00b398848.bindTooltip(
                 `&lt;div&gt;
                      Click for details
                  &lt;/div&gt;`,
@@ -279,31 +711,31 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
             );
         
     
-            var marker_406831595c556be27e647ea566df949b = L.marker(
-                [39.638441779765465, -120.2130751910005],
+            var marker_c80bb84d31147ab42371a4724eaa1959 = L.marker(
+                [39.916757950467314, -120.31231487509305],
                 {
 }
-            ).addTo(map_3d4316bdf9808d9b466078bc009b1b01);
+            ).addTo(map_53f7f331f2847c80e018908eb16d43f6);
         
     
-        var popup_f38151b68b317a68b09d621dddd696f6 = L.popup({
+        var popup_d8dd56859681108f1a3faa79c795efcc = L.popup({
   &quot;maxWidth&quot;: &quot;100%&quot;,
 });
 
         
             
-                var html_0a2efbadcc784c60b45e378c2fd84b6a = $(`&lt;div id=&quot;html_0a2efbadcc784c60b45e378c2fd84b6a&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-4&lt;/div&gt;`)[0];
-                popup_f38151b68b317a68b09d621dddd696f6.setContent(html_0a2efbadcc784c60b45e378c2fd84b6a);
+                var html_40a66248a5e78776b1e4845cf7f4836b = $(`&lt;div id=&quot;html_40a66248a5e78776b1e4845cf7f4836b&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-4&lt;/div&gt;`)[0];
+                popup_d8dd56859681108f1a3faa79c795efcc.setContent(html_40a66248a5e78776b1e4845cf7f4836b);
             
         
 
-        marker_406831595c556be27e647ea566df949b.bindPopup(popup_f38151b68b317a68b09d621dddd696f6)
+        marker_c80bb84d31147ab42371a4724eaa1959.bindPopup(popup_d8dd56859681108f1a3faa79c795efcc)
         ;
 
         
     
     
-            marker_406831595c556be27e647ea566df949b.bindTooltip(
+            marker_c80bb84d31147ab42371a4724eaa1959.bindTooltip(
                 `&lt;div&gt;
                      Click for details
                  &lt;/div&gt;`,
@@ -313,31 +745,31 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
             );
         
     
-            var marker_3bf7f9bea16ba96796a4789f08932743 = L.marker(
-                [39.51313005222162, -120.5326042108411],
+            var marker_ff38e589202c79ac52890a980a735a70 = L.marker(
+                [39.827872042356624, -120.58635835906689],
                 {
 }
-            ).addTo(map_3d4316bdf9808d9b466078bc009b1b01);
+            ).addTo(map_53f7f331f2847c80e018908eb16d43f6);
         
     
-        var popup_17cf9dbebada70b7cea206080c913c54 = L.popup({
+        var popup_3450f7e9ad4356af39281279cbfaccc9 = L.popup({
   &quot;maxWidth&quot;: &quot;100%&quot;,
 });
 
         
             
-                var html_b8f3c6286c737a3ebffbbdf1c1022e74 = $(`&lt;div id=&quot;html_b8f3c6286c737a3ebffbbdf1c1022e74&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-5&lt;/div&gt;`)[0];
-                popup_17cf9dbebada70b7cea206080c913c54.setContent(html_b8f3c6286c737a3ebffbbdf1c1022e74);
+                var html_7e91b0ab4b2701e0e22285f96357f4fa = $(`&lt;div id=&quot;html_7e91b0ab4b2701e0e22285f96357f4fa&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-5&lt;/div&gt;`)[0];
+                popup_3450f7e9ad4356af39281279cbfaccc9.setContent(html_7e91b0ab4b2701e0e22285f96357f4fa);
             
         
 
-        marker_3bf7f9bea16ba96796a4789f08932743.bindPopup(popup_17cf9dbebada70b7cea206080c913c54)
+        marker_ff38e589202c79ac52890a980a735a70.bindPopup(popup_3450f7e9ad4356af39281279cbfaccc9)
         ;
 
         
     
     
-            marker_3bf7f9bea16ba96796a4789f08932743.bindTooltip(
+            marker_ff38e589202c79ac52890a980a735a70.bindTooltip(
                 `&lt;div&gt;
                      Click for details
                  &lt;/div&gt;`,
@@ -347,31 +779,31 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
             );
         
     
-            var marker_e468140653c4812d88d967c6b7633331 = L.marker(
-                [39.69973789576805, -120.16611790890829],
+            var marker_380e5f45790541ca02baec1cf72d0065 = L.marker(
+                [39.95310647125106, -120.1983374511518],
                 {
 }
-            ).addTo(map_3d4316bdf9808d9b466078bc009b1b01);
+            ).addTo(map_53f7f331f2847c80e018908eb16d43f6);
         
     
-        var popup_92ee0debcb968a4cd35b7bb60ea616e5 = L.popup({
+        var popup_040118656fb4d66ba9a710980cf3599b = L.popup({
   &quot;maxWidth&quot;: &quot;100%&quot;,
 });
 
         
             
-                var html_778ae7b43bc93105820506255f59bb32 = $(`&lt;div id=&quot;html_778ae7b43bc93105820506255f59bb32&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-6&lt;/div&gt;`)[0];
-                popup_92ee0debcb968a4cd35b7bb60ea616e5.setContent(html_778ae7b43bc93105820506255f59bb32);
+                var html_2c1df2bd79521fe8c4cc6b62b2b9ce9d = $(`&lt;div id=&quot;html_2c1df2bd79521fe8c4cc6b62b2b9ce9d&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-6&lt;/div&gt;`)[0];
+                popup_040118656fb4d66ba9a710980cf3599b.setContent(html_2c1df2bd79521fe8c4cc6b62b2b9ce9d);
             
         
 
-        marker_e468140653c4812d88d967c6b7633331.bindPopup(popup_92ee0debcb968a4cd35b7bb60ea616e5)
+        marker_380e5f45790541ca02baec1cf72d0065.bindPopup(popup_040118656fb4d66ba9a710980cf3599b)
         ;
 
         
     
     
-            marker_e468140653c4812d88d967c6b7633331.bindTooltip(
+            marker_380e5f45790541ca02baec1cf72d0065.bindTooltip(
                 `&lt;div&gt;
                      Click for details
                  &lt;/div&gt;`,
@@ -381,31 +813,31 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
             );
         
     
-            var marker_d3c18459d6d25acd9890b93338af81e1 = L.marker(
-                [39.65761158382477, -120.0369845777014],
+            var marker_f4dc176c87aeb524442726d67dff1f0a = L.marker(
+                [39.79687067964101, -120.7368842275836],
                 {
 }
-            ).addTo(map_3d4316bdf9808d9b466078bc009b1b01);
+            ).addTo(map_53f7f331f2847c80e018908eb16d43f6);
         
     
-        var popup_b4d7e34f56303be485f24c86449415c6 = L.popup({
+        var popup_aa991a02dfa4ce4f74ce1fb5ed0443e5 = L.popup({
   &quot;maxWidth&quot;: &quot;100%&quot;,
 });
 
         
             
-                var html_47cb654f6993ea8352f910ac6ab3ea8d = $(`&lt;div id=&quot;html_47cb654f6993ea8352f910ac6ab3ea8d&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-7&lt;/div&gt;`)[0];
-                popup_b4d7e34f56303be485f24c86449415c6.setContent(html_47cb654f6993ea8352f910ac6ab3ea8d);
+                var html_cecd98d84092fb46a46e012074d31c14 = $(`&lt;div id=&quot;html_cecd98d84092fb46a46e012074d31c14&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-7&lt;/div&gt;`)[0];
+                popup_aa991a02dfa4ce4f74ce1fb5ed0443e5.setContent(html_cecd98d84092fb46a46e012074d31c14);
             
         
 
-        marker_d3c18459d6d25acd9890b93338af81e1.bindPopup(popup_b4d7e34f56303be485f24c86449415c6)
+        marker_f4dc176c87aeb524442726d67dff1f0a.bindPopup(popup_aa991a02dfa4ce4f74ce1fb5ed0443e5)
         ;
 
         
     
     
-            marker_d3c18459d6d25acd9890b93338af81e1.bindTooltip(
+            marker_f4dc176c87aeb524442726d67dff1f0a.bindTooltip(
                 `&lt;div&gt;
                      Click for details
                  &lt;/div&gt;`,
@@ -415,31 +847,31 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
             );
         
     
-            var marker_8baf6da702b939404338d4788fe21238 = L.marker(
-                [39.763983248112474, -120.70266782739125],
+            var marker_cc865ffa679640277bcafd47f9b2f03d = L.marker(
+                [39.67368505811973, -120.18201961707457],
                 {
 }
-            ).addTo(map_3d4316bdf9808d9b466078bc009b1b01);
+            ).addTo(map_53f7f331f2847c80e018908eb16d43f6);
         
     
-        var popup_02e0cb028c730284e1397bc5ae520ee1 = L.popup({
+        var popup_7572424ac9682c2c5e646096f61bdec4 = L.popup({
   &quot;maxWidth&quot;: &quot;100%&quot;,
 });
 
         
             
-                var html_9ed97272373b481d9fb7e9bad7a7f174 = $(`&lt;div id=&quot;html_9ed97272373b481d9fb7e9bad7a7f174&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-8&lt;/div&gt;`)[0];
-                popup_02e0cb028c730284e1397bc5ae520ee1.setContent(html_9ed97272373b481d9fb7e9bad7a7f174);
+                var html_657d8782cd8c804b76b851deb3153a08 = $(`&lt;div id=&quot;html_657d8782cd8c804b76b851deb3153a08&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-8&lt;/div&gt;`)[0];
+                popup_7572424ac9682c2c5e646096f61bdec4.setContent(html_657d8782cd8c804b76b851deb3153a08);
             
         
 
-        marker_8baf6da702b939404338d4788fe21238.bindPopup(popup_02e0cb028c730284e1397bc5ae520ee1)
+        marker_cc865ffa679640277bcafd47f9b2f03d.bindPopup(popup_7572424ac9682c2c5e646096f61bdec4)
         ;
 
         
     
     
-            marker_8baf6da702b939404338d4788fe21238.bindTooltip(
+            marker_cc865ffa679640277bcafd47f9b2f03d.bindTooltip(
                 `&lt;div&gt;
                      Click for details
                  &lt;/div&gt;`,
@@ -449,31 +881,31 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
             );
         
     
-            var marker_1238f2cff99415a84c41a791bac3fd49 = L.marker(
-                [39.911696005531326, -120.39835151504863],
+            var marker_726dcaa1e2bed68b415313b3cc2c84cd = L.marker(
+                [39.93160612008657, -120.49130592630772],
                 {
 }
-            ).addTo(map_3d4316bdf9808d9b466078bc009b1b01);
+            ).addTo(map_53f7f331f2847c80e018908eb16d43f6);
         
     
-        var popup_b721a1ca4481904d3e92f2fd37bb46db = L.popup({
+        var popup_c96b0fc590686fc6f573cfdd9abb7f50 = L.popup({
   &quot;maxWidth&quot;: &quot;100%&quot;,
 });
 
         
             
-                var html_98d3bb1f45301bc19deb46376c9c1b11 = $(`&lt;div id=&quot;html_98d3bb1f45301bc19deb46376c9c1b11&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-9&lt;/div&gt;`)[0];
-                popup_b721a1ca4481904d3e92f2fd37bb46db.setContent(html_98d3bb1f45301bc19deb46376c9c1b11);
+                var html_3dd5019da8cfcd1fc6674796651ad25c = $(`&lt;div id=&quot;html_3dd5019da8cfcd1fc6674796651ad25c&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-9&lt;/div&gt;`)[0];
+                popup_c96b0fc590686fc6f573cfdd9abb7f50.setContent(html_3dd5019da8cfcd1fc6674796651ad25c);
             
         
 
-        marker_1238f2cff99415a84c41a791bac3fd49.bindPopup(popup_b721a1ca4481904d3e92f2fd37bb46db)
+        marker_726dcaa1e2bed68b415313b3cc2c84cd.bindPopup(popup_c96b0fc590686fc6f573cfdd9abb7f50)
         ;
 
         
     
     
-            marker_1238f2cff99415a84c41a791bac3fd49.bindTooltip(
+            marker_726dcaa1e2bed68b415313b3cc2c84cd.bindTooltip(
                 `&lt;div&gt;
                      Click for details
                  &lt;/div&gt;`,
@@ -483,31 +915,31 @@ document.addEventListener(&quot;readystatechange&quot;, function () {
             );
         
     
-            var marker_fef3794b597b82ebf25421f6359dfdc2 = L.marker(
-                [39.95052906070646, -120.52931245806784],
+            var marker_bda2fa9f5b289b4f05008f97c85e5604 = L.marker(
+                [39.927165868993924, -120.27134140811205],
                 {
 }
-            ).addTo(map_3d4316bdf9808d9b466078bc009b1b01);
+            ).addTo(map_53f7f331f2847c80e018908eb16d43f6);
         
     
-        var popup_43784c34fdb416eaf07c131ea7cca3b2 = L.popup({
+        var popup_4979dae082ec09e07f78451ab5a05f5b = L.popup({
   &quot;maxWidth&quot;: &quot;100%&quot;,
 });
 
         
             
-                var html_90e648a0114897e67a862d92d1227f16 = $(`&lt;div id=&quot;html_90e648a0114897e67a862d92d1227f16&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-10&lt;/div&gt;`)[0];
-                popup_43784c34fdb416eaf07c131ea7cca3b2.setContent(html_90e648a0114897e67a862d92d1227f16);
+                var html_c06df9f6c12bd73c4cf283c48992ba67 = $(`&lt;div id=&quot;html_c06df9f6c12bd73c4cf283c48992ba67&quot; style=&quot;width: 100.0%; height: 100.0%;&quot;&gt;Buoy ID: BUOY-10&lt;/div&gt;`)[0];
+                popup_4979dae082ec09e07f78451ab5a05f5b.setContent(html_c06df9f6c12bd73c4cf283c48992ba67);
             
         
 
-        marker_fef3794b597b82ebf25421f6359dfdc2.bindPopup(popup_43784c34fdb416eaf07c131ea7cca3b2)
+        marker_bda2fa9f5b289b4f05008f97c85e5604.bindPopup(popup_4979dae082ec09e07f78451ab5a05f5b)
         ;
 
         
     
     
-            marker_fef3794b597b82ebf25421f6359dfdc2.bindTooltip(
+            marker_bda2fa9f5b289b4f05008f97c85e5604.bindTooltip(
                 `&lt;div&gt;
                      Click for details
                  &lt;/div&gt;`,
