@@ -1,0 +1,4 @@
+dos2unix
+python@3.11
+pyqt@5
+postgresql@14
