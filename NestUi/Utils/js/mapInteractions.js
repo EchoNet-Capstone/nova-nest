@@ -46,6 +46,6 @@ function attachMarkerEvents(mapInstance) {
 //Optionally, if you need to run attachMarkerEvents without waiting for QWebChannel (for debugging)
 document.addEventListener("readystatechange", function () {
     if (document.readyState === "complete") {
-        attachMarkerEvents({{map_instance}});
+        attachMarkerEvents({{ mapInstance }});
     }
 });

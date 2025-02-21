@@ -68,7 +68,6 @@ class NestGeoMapWidget(QWidget):
         self.label.setText(f"Marker clicked: {buoy_id}")
         
 
-
     def handleConsoleMessage(self, msg):
         """ Extracts coordinates from JavaScript console log and updates PyQt UI. """
         data = json.loads(msg)
