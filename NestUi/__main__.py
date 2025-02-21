@@ -1,12 +1,16 @@
 import sys
-from .Gui import NestMainWindow
 from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication
+from dotenv import load_dotenv
+
+from .Gui import NestMainWindow
+from .Utils.nest_db import *
 
 # Run the application
 if __name__ == "__main__":
-    sys.settrace
-    
+    # load environment variables from .env file
+    load_dotenv()
+
     app = QApplication(sys.argv)
     app.setApplicationName("BuRD Control Program")
     app.setWindowIcon(QIcon("NestUi/Gui/GuiImages/EchoNetLogo.png"))

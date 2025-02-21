@@ -1,0 +1,22 @@
+#!/bin/zsh
+
+# Ensure that the virtual environment exists
+if [[ ! -d "env" ]]; then
+    echo 'Run setup script ("./setup") first!'
+    exit 1
+fi
+
+# Check if PostgreSQL is running using pg_isready
+if ! pg_isready >/dev/null 2>&1; then
+    echo "PostgreSQL not running... starting via Homebrew services"
+    brew services start postgresql
+fi
+
+# Activate the Python virtual environment
+source env/bin/activate
+
+# Run the NestUi Python module
+python3 -m NestUi
+
+# Deactivate the virtual environment
+deactivate

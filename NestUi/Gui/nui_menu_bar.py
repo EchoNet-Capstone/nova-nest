@@ -4,15 +4,11 @@ from PySide6.QtCore import QObject
 from .nui_serial import *
 
 class NuiMenuOption():
-    def __init__(self, widget:QWidget, trigger_func:object, shortcut:str=None, parent=None):
+    def __init__(self, widget:QWidget, trigger_func:object, shortcut:str=None):
         self.widget: QWidget = widget
-        self.parent: QObject = parent
         self.trigger_func: object = trigger_func
         self.action: QAction = None
         self.shortcut: str = shortcut
-            
-        # if parent:
-        #     self.widget.setParent(self.parent)
 
 class NestMenuBar(QMenuBar):
 
@@ -36,7 +32,7 @@ class NestMenuBar(QMenuBar):
                 'Save': 
                     NuiMenuOption(
                         self.serial_widget, 
-                        self.serial_widget.show()),
+                        None),
                 'Open': 
                     NuiMenuOption(
                         None,
@@ -100,16 +96,15 @@ class NestMenuBar(QMenuBar):
             for menu_opt in curr_menu_order:
                 try:
                     curr_opt: NuiMenuOption = self.menu_widgets[curr_menu_title][menu_opt]
-
+                    
                     curr_opt.action = QAction(menu_opt, curr_menu)
+                    curr_menu.addAction(curr_opt.action)
                     
                     if curr_opt.trigger_func:
                         curr_opt.action.triggered.connect(curr_opt.trigger_func)
                     
                     if curr_opt.shortcut:
                         curr_opt.action.setShortcut(curr_opt.shortcut)
-
-                    curr_menu.addAction(curr_opt.action)
 
                 except KeyError:
                     curr_menu.addSeparator()
