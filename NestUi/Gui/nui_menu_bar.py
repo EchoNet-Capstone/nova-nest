@@ -29,7 +29,7 @@ class NestMenuBar(QMenuBar):
         self.menu_widgets = {
             'File':  
             {
-                'Save': 
+                'Send Serial': 
                     NuiMenuOption(
                         self.serial_widget, 
                         None),
@@ -67,7 +67,7 @@ class NestMenuBar(QMenuBar):
         self.menu_layout =  [
             ('File',
             [
-                'Save',
+                'Send Serial',
                 'Open',
                 '----',
                 'Exit'
