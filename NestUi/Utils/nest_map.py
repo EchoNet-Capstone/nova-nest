@@ -1,10 +1,11 @@
 import geopandas as gpd
 import requests
 import socket
-import random
 from shapely.geometry import Point
 import folium
 from folium.plugins import MousePosition, MarkerCluster
+from ..Utils.nest_db import *
+
 
 
 ########################################
@@ -121,8 +122,6 @@ def setup_map():
         prefix='Coordinates:'
     ).add_to(m)
     
-    # Add ClickForLatLng plugin. When the map is clicked, the coordinates are 
-    
     return m
 
 def add_events_to_map(m, gdf):
@@ -148,33 +147,35 @@ def add_events_to_map(m, gdf):
 
     return m
 
-def generate_random_buoys(num_buoys=10, lat_range=(39.5, 40.0), lon_range=(-120.8, -120.0)):
-    """
-    Generate a list of Folium markers with random buoy locations.
-
-    Parameters:
-        num_buoys (int): Number of random buoys to generate.
-        lat_range (tuple): Latitude range for random points.
-        lon_range (tuple): Longitude range for random points.
-
-    Returns:
-        list: A list of Folium Marker objects.
-    """
+def get_buoys_from_db():
+    # Retrieve buoy records from the database via Prisma.
+    # list_buoys() is decorated to run synchronously.
+    buoy_records = list_buoys()
+    
     markers = []
+    if not buoy_records:
+        print("No buoys found in the database.")
+        return markers
 
-    for i in range(num_buoys):
-        lat = random.uniform(*lat_range)
-        lon = random.uniform(*lon_range)
-        buoy_id = f"BUOY-{i+1}"  # Assign unique ID
-        popup_text = f"Buoy ID: {buoy_id}"
+    for buoy in buoy_records:
+        # Access attributes using dot notation
+        lat = buoy.lat
+        lon = buoy.long  # Assuming the attribute name is 'long'
+        buoy_id = buoy.buoy_id
+        battery = getattr(buoy, 'battery', "N/A")
+        drop_time = getattr(buoy, 'drop_time', "Unknown")
+        
+        popup_text = (
+            f"Buoy ID: {buoy_id}<br>"
+            f"Battery: {battery}<br>"
+            f"Drop Time: {drop_time}"
+        )
 
-        # Create Folium marker
         marker = folium.Marker(
             location=[lat, lon],
             popup=popup_text,
             tooltip="Click for details"
         )
-
         markers.append(marker)
 
     return markers

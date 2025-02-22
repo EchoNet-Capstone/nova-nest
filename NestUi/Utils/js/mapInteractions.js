@@ -1,4 +1,3 @@
-
 // Function to attach click events to markers
 function attachMarkerEvents(mapInstance) {
     console.log("✅ Attaching marker click events...");
@@ -6,6 +5,7 @@ function attachMarkerEvents(mapInstance) {
         console.error("❌ ERROR: Map instance is undefined.");
         return;
     }
+
     let markerCount = 0;
     mapInstance.eachLayer(function(layer) {
         if (layer instanceof L.Marker) {
@@ -23,17 +23,11 @@ function attachMarkerEvents(mapInstance) {
                         contentText = String(popupContent);
                     }
                     console.log("Popup Content:", contentText);
-                    let match = contentText.match(/Buoy ID: (BUOY-\d+)/);
+                    let match = contentText.match(/Buoy ID:\s*(\d+)/);
                     if (match) {
                         let buoyId = match[1];
-                        console.log("✅ Clicked Buoy ID:", buoyId);
+                        console.log("markerClicked:" + buoyId);
                         alert("Buoy Clicked: " + buoyId);
-                        if (mapbridge) {
-                            console.log("✅ Sending Buoy ID to PyQt");
-                            mapbridge.markerClicked.emit(buoyId);
-                        } else {
-                            console.log("❌ Qt WebChannel not found!");
-                        }
                     }
                 }
             });
@@ -42,10 +36,9 @@ function attachMarkerEvents(mapInstance) {
     console.log("✅ Total Markers Found:", markerCount);
 }
 
-
-//Optionally, if you need to run attachMarkerEvents without waiting for QWebChannel (for debugging)
+// Optionally, if you need to run attachMarkerEvents without waiting for QWebChannel (for debugging)
 document.addEventListener("readystatechange", function () {
     if (document.readyState === "complete") {
-        attachMarkerEvents({{ mapInstance }});
+        attachMarkerEvents({{map_instance}});
     }
 });

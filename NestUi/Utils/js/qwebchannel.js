@@ -431,6 +431,6 @@
 
 var mapbridge = null;
 new QWebChannel(qt.webChannelTransport, function(channel) {
-    mapbridge = channel.objects.mapbridge;
+    window.mapbridge = channel.objects.mapbridge;
 });
 
