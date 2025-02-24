@@ -1,4 +1,4 @@
-clickable_map.html
+*.html
 .vscode
 *.code-workspace
 setup_out
