@@ -1,8 +1,8 @@
 import os
-from PySide6.QtWidgets import QApplication, QVBoxLayout, QWidget, QLabel
+from PySide6.QtWidgets import QVBoxLayout, QWidget, QLabel
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEnginePage
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import Signal
 from folium import Element
 from jinja2 import Template
 from ..Utils.nest_map import *
@@ -19,22 +19,8 @@ class WebEnginePage(QWebEnginePage):
             # Otherwise, print normally.
             print(f"JavaScript Console [{level}]: {msg}")
 
-    """Custom QWebEnginePage to intercept JavaScript messages via URL changes."""
-    def acceptNavigationRequest(self, url, _type, isMainFrame):
-        if url.scheme() == "myapp":
-            # Expecting a URL like: myapp://markerClicked?data=BUOY-123
-            query = url.query()  # Should be "data=BUOY-123"
-            if query.startswith("data="):
-                buoy_id = query[5:]  # remove "data=" prefix
-                # Decode any URL encoding:
-                buoy_id = QUrl.fromPercentEncoding(buoy_id.encode("utf-8"))
-                print(f"✅ Received Buoy ID from JS: {buoy_id}")
-                # Call the parent's marker click handler
-                self.parent().on_marker_click(buoy_id)
-            return False  # Block navigation
-        return super().acceptNavigationRequest(url, _type, isMainFrame)
-
 class NestGeoMapWidget(QWidget):
+    markerClicked = Signal(str)
     """PySide6 Widget for displaying a Folium map in QWebEngineView without using WebChannel."""
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -42,9 +28,6 @@ class NestGeoMapWidget(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout(self)
-        self.label = QLabel("Marker clicks will appear here.")
-        layout.addWidget(self.label)
-
         # Create QWebEngineView with custom page
         self.web_view = QWebEngineView()
         self.web_page = WebEnginePage(self)
@@ -56,9 +39,8 @@ class NestGeoMapWidget(QWidget):
         layout.addWidget(self.web_view)
 
     def on_marker_click(self, buoy_id):
-        """Slot called when a marker is clicked in JavaScript."""
         print(f"✅ Buoy Marker Clicked: {buoy_id}")
-        self.label.setText(f"Marker clicked: {buoy_id}")
+        self.markerClicked.emit(buoy_id)
 
 def add_external_js(map_object, js_file_path):
     """
