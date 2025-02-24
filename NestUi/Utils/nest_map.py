@@ -3,7 +3,9 @@ import requests
 import socket
 from shapely.geometry import Point
 import folium
-from folium.plugins import MousePosition
+from folium.plugins import MousePosition, MarkerCluster
+from ..Utils.nest_db import *
+
 
 
 ########################################
@@ -33,47 +35,58 @@ def is_connected():
     except OSError:
         return False
 
-def get_earthranger_data():
+def get_buoys(lat=39.7749, lon=-120.4194, state=None, updated_since=None, page=1, page_size=25):
     """Fetch data from EarthRanger API and return as a GeoDataFrame."""
     if not is_connected():
         print("No internet connection. Please connect and try again.")
         return gpd.GeoDataFrame()
-    
-    # Replace with your EarthRanger API credentials/token
-    BASE_URL = "https://ropeless-sandbox.pamdas.org/api/v1.0/activity/events"
-    TOKEN = "duNL2uc2O4DNRBCQNu9swRO5OofEaxFa"  # Replace with your OAuth2 token
+
+    BASE_URL = "https://buoy.pamdas.org/api/v1.0/gear/"
+    TOKEN = "CVuqlvvFPsTkZ9nVlrk3o0kMY59MxC"
 
     headers = {
         "Authorization": f"Bearer {TOKEN}",
-        "Accpet": "application/json",
-        "Content-Disposition": "attachment; filename={}",
-        "Content-Type": "application/json"
+        "Accept": "application/json",
     }
-    
+
+    # Construct query parameters
+    params = {
+        "lat": lat,
+        "lon": lon,
+        "page": page,
+        "page_size": page_size,
+    }
+    if state:
+        params["state"] = state
+    if updated_since:
+        params["updated_since"] = updated_since
+
     try:
-        response = requests.get(BASE_URL, headers=headers)
+        response = requests.get(BASE_URL, headers=headers, params=params)
         print("Status Code:", response.status_code)
         if response.status_code != 200:
             print(f"Error: {response.status_code} - {response.text}")
             return gpd.GeoDataFrame()
-        
-        events = response.json()
+
+        data = response.json()
         features = []
-        for event in events.get('results', []):
-            location = event.get("location")
-            if location and "latitude" in location and "longitude" in location:
+
+        for item in data.get('results', []):
+            location = item.get("location")
+            if location and isinstance(location, dict) and "latitude" in location and "longitude" in location:
                 features.append({
-                    "event_type": event.get("event_type", "Unknown"),
-                    "time": event.get("time"),
-                    "priority": event.get("priority", None),
+                    "id": item.get("id"),
+                    "subject": item.get("subject", "Unknown"),
                     "geometry": Point(location["longitude"], location["latitude"])
                 })
+
         if features:
             gdf = gpd.GeoDataFrame(features, crs="EPSG:4326")
             return gdf
         else:
             print("No valid geometries found in the data.")
             return gpd.GeoDataFrame()
+
     except Exception as e:
         print("Error fetching data:", str(e))
         return gpd.GeoDataFrame()
@@ -95,16 +108,6 @@ def setup_map():
     # Center map at a default location (e.g., [0, 0]). Adjust zoom as needed.
     m = folium.Map(location=[0, 0], zoom_start=2)
     
-    # Add OpenStreetMap layer (Default Street View)
-    folium.TileLayer('OpenStreetMap', name='OpenStreetMap').add_to(m)
-
-    # Add CartoDB Positron (Light Street View)
-    folium.TileLayer(
-        tiles='https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-        attr='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        name='CartoDB Positron'
-    ).add_to(m)
-
     # Add Terrain layer (using OpenTopoMap as an alternative)
     folium.TileLayer(
         tiles='https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
@@ -112,23 +115,6 @@ def setup_map():
         name='Terrain (OpenTopoMap)'
     ).add_to(m)
 
-    # Add Satellite layer
-    folium.TileLayer(
-        tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        attr='Esri',
-        name='Satellite'
-    ).add_to(m)
-
-    # Add Hybrid layer (Satellite with labels)
-    folium.TileLayer(
-        tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-        attr='Google',
-        name='Google Hybrid'
-    ).add_to(m)
-
-    # Add layer control to switch between layers
-    folium.LayerControl().add_to(m)
-    
     # Add MousePosition plugin
     MousePosition(
         position='bottomright',
@@ -136,28 +122,60 @@ def setup_map():
         prefix='Coordinates:'
     ).add_to(m)
     
-    # Add ClickForLatLng plugin. When the map is clicked, the coordinates are 
-    m.add_child(
-        folium.ClickForMarker()
-    )
-    
     return m
 
 def add_events_to_map(m, gdf):
-    """
-    Add markers to the folium map for each event in the GeoDataFrame.
-    Each marker's popup displays event type, time, and priority.
-    """
     if gdf.empty:
-        print("No events to add to the map.")
+        print("No buoys to add to the map.")
         return
-    
-    for row in gdf.iterrows():
-        lat = row.geometry.y
-        lng = row.geometry.x
-        popup_text = (
-            f"<strong>Event:</strong> {row.get('event_type', 'Unknown')}<br>"
-            f"<strong>Time:</strong> {row.get('time', 'N/A')}<br>"
-            f"<strong>Priority:</strong> {row.get('priority', 'N/A')}"
+
+    marker_cluster = MarkerCluster().add_to(m)  # Cluster markers to optimize rendering
+
+    for _, row in gdf.iterrows():
+        buoy_id = row.get("id", "Unknown")
+        lat, lng = row.geometry.y, row.geometry.x
+
+        popup_text = f"Buoy ID: {buoy_id}"
+
+        # Create a marker with a popup (bindPopup ensures markers are recognized)
+        marker = folium.Marker(
+            location=[lat, lng],
+            popup=popup_text
         )
-        folium.Marker([lat, lng], popup=popup_text).add_to(m)
+
+        marker.add_to(marker_cluster)
+
+    return m
+
+def get_buoys_from_db():
+    # Retrieve buoy records from the database via Prisma.
+    # list_buoys() is decorated to run synchronously.
+    buoy_records = list_buoys()
+    
+    markers = []
+    if not buoy_records:
+        print("No buoys found in the database.")
+        return markers
+
+    for buoy in buoy_records:
+        # Access attributes using dot notation
+        lat = buoy.lat
+        lon = buoy.long  # Assuming the attribute name is 'long'
+        buoy_id = buoy.buoy_id
+        battery = getattr(buoy, 'battery', "N/A")
+        drop_time = getattr(buoy, 'drop_time', "Unknown")
+        
+        popup_text = (
+            f"Buoy ID: {buoy_id}<br>"
+            f"Battery: {battery}<br>"
+            f"Drop Time: {drop_time}"
+        )
+
+        marker = folium.Marker(
+            location=[lat, lon],
+            popup=popup_text,
+            tooltip="Click for details"
+        )
+        markers.append(marker)
+
+    return markers

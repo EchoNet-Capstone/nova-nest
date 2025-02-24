@@ -1,7 +1,8 @@
-map.html
+*.html
 .vscode
 *.code-workspace
 setup_out
+
 
 #python stuff
 __pycache__
@@ -9,4 +10,4 @@ env
 
 #prisma stuff
 .env
-migrations
+migrations/

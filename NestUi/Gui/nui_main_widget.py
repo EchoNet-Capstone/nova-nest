@@ -20,5 +20,7 @@ class NestMainWidget(QWidget):
         main_layout.addWidget(burd_status_area, 1)
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
+
+        burd_map.markerClicked.connect(burd_status.update_status)
         
         self.setLayout(main_layout)

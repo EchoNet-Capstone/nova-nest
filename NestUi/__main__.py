@@ -10,6 +10,7 @@ from .Utils.nest_db import *
 if __name__ == "__main__":
     # load environment variables from .env file
     load_dotenv()
+    print(list_buoys())
 
     app = QApplication(sys.argv)
     app.setApplicationName("BuRD Control Program")
