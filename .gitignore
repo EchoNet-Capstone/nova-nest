@@ -9,4 +9,4 @@ env
 
 #prisma stuff
 .env
-migrations
+migrations/
