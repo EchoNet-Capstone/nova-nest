@@ -72,9 +72,15 @@ def get_html_map():
     for marker in markers:
         marker.add_to(folium_map)
 
-    # Write the map HTML to disk so that all resources load correctly.
+    # Generate HTML string from the map.
     map_html = folium_map._repr_html_()
-    file_name = "clickable_map.html"
+
+    # Define the file path and create directory if it doesn't exist.
+    file_name = "NestUi/Gui/map_dep/clickable_map.html"
+    directory = os.path.dirname(file_name)
+    os.makedirs(directory, exist_ok=True)
+
+    # Write the map HTML to the file.
     with open(file_name, "w", encoding="utf-8") as file:
         file.write(map_html)
     print(f"✅ Clickable map saved to {os.path.abspath(file_name)}")
