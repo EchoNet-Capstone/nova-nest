@@ -6,3 +6,4 @@ folium
 geopandas
 matplotlib
 prisma
+offline_folium

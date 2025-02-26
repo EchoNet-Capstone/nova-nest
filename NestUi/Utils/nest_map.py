@@ -2,6 +2,7 @@ import geopandas as gpd
 import requests
 import socket
 from shapely.geometry import Point
+from offline_folium import offline
 import folium
 from folium.plugins import MousePosition, MarkerCluster
 from ..Utils.nest_db import *
