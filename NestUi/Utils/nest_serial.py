@@ -11,6 +11,8 @@ def send_packet(serial_port, baud_rate, ascii_data):
             ser.write(packet)
             print("Packet sent over serial!")
             QMessageBox.information(None, "Success", "Packet sent successfully!")
+            return True
     except serial.SerialException as e:
         print(f"Error sending packet: {e}")
         QMessageBox.critical(None, "Error", f"Failed to send packet:\n{e}")
+        return False
