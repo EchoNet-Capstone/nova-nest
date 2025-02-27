@@ -2,6 +2,7 @@ import geopandas as gpd
 import requests
 import socket
 from shapely.geometry import Point
+from offline_folium import offline
 import folium
 from folium.plugins import MarkerCluster, BeautifyIcon
 from ..Utils.nest_db import *
@@ -99,20 +100,13 @@ def setup_map():
     Create and return a folium map with:
       - OpenStreetMap tile layer (with attribution)
       - MousePosition to display current coordinates
-      - ClickForLatLng plugin to copy coordinates to the clipboard.
+      - ClickForLatLng plugin to copy coordifnates to the clipboard.
     
     The ClickForLatLng plugin is configured with a format string that outputs 
     the coordinates as a list (e.g., [lat, lng]) and with alert=True.
     """
     # Center map at a default location (e.g., [0, 0]). Adjust zoom as needed.
     m = folium.Map(location=[0, 0], zoom_start=2)
-    
-    # Add Terrain layer (using OpenTopoMap as an alternative)
-    folium.TileLayer(
-        tiles='https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-        attr='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
-        name='Terrain (OpenTopoMap)'
-    ).add_to(m)
     
     return m
 

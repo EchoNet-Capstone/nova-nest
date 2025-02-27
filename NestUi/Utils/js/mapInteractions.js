@@ -27,7 +27,7 @@ function attachMarkerEvents(mapInstance) {
                     if (match) {
                         let buoyId = match[1];
                         console.log("markerClicked:" + buoyId);
-                        alert("Buoy Clicked: " + buoyId);
+                        //alert("Buoy Clicked: " + buoyId);
                     }
                 }
             });
