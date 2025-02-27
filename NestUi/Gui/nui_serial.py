@@ -143,7 +143,7 @@ class NuiSerialWidget(QWidget):
         self.port_combo.clear()
         self.port_combo.addItems(port_list)
 
-    def build_floc_packet(self):
+    def build_floc_packet(self) -> bytes:
         # Retrieve values from the UI fields
         ttl = int(self.ttl_combo.currentText())
         type_val = int(self.type_combo.currentText())
@@ -177,7 +177,7 @@ class NuiSerialWidget(QWidget):
         floc_packet = bytes([first_byte]) + nid_bytes + bytes([pid_byte]) + dst_bytes + src_bytes + data_bytes
         return floc_packet
 
-    def build_nest_to_burd_packet(self, floc_packet):
+    def build_nest_to_burd_packet(self, floc_packet: bytes) -> bytes:
         # NeST packet: CMD ID (1 byte) is ASCII 'B'; then size (1 byte) followed by FLOC packet.
         cmd_id = ord('B')
         size = len(floc_packet)
@@ -203,9 +203,9 @@ class NuiSerialWidget(QWidget):
             self.packetdata_edit.setPlainText("Error: " + str(e))
             return
 
-        nest_packet = self.build_nest_to_burd_packet(floc_packet)
+        nest_packet: bytes = self.build_nest_to_burd_packet(floc_packet)
         # Prepend '$' and append "\r\n" to the packet
-        full_packet = "$" + nest_packet.hex().upper() + "\r\n"
+        full_packet: bytes = "$" + nest_packet + "\r\n"
         serial_port = self.port_combo.currentText()
         try:
             baud_rate = int(self.baud_combo.currentText())
@@ -215,7 +215,7 @@ class NuiSerialWidget(QWidget):
 
         if send_packet(serial_port, baud_rate, full_packet):
             # If send_packet doesn't raise an exception, assume success:
-            self.packetdata_edit.setPlainText("Sent: " + full_packet)
+            self.packetdata_edit.setPlainText("Sent: " + full_packet.hex().upper())
             # Update the PID only after a successful send
             current_pid = int(self.pid_edit.text())
             new_pid = (current_pid + 1) % 64
