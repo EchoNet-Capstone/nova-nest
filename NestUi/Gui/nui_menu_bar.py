@@ -17,7 +17,7 @@ class NestMenuBar(QMenuBar):
          
         self.is_fullscreen = False
         
-        self.serial_widget = SerialPacketSender()
+        self.serial_widget = NuiSerialWidget()
     	
         '''
         Top Level dictionary contains the menu bar menu title and it's submenu 
