@@ -205,7 +205,7 @@ class NuiSerialWidget(QWidget):
 
         nest_packet: bytes = self.build_nest_to_burd_packet(floc_packet)
         # Prepend '$' and append "\r\n" to the packet
-        full_packet: bytes = "$" + nest_packet + "\r\n"
+        full_packet: bytes = bytes("$") + nest_packet + bytes("\r\n")
         serial_port = self.port_combo.currentText()
         try:
             baud_rate = int(self.baud_combo.currentText())
