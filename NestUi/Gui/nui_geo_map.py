@@ -3,7 +3,6 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget, QLabel
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEnginePage
 from PySide6.QtCore import Signal
-from offline_folium import offline
 from folium import Element
 from jinja2 import Template
 from ..Utils.nest_map import *

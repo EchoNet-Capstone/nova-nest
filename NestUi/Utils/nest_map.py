@@ -2,11 +2,9 @@ import geopandas as gpd
 import requests
 import socket
 from shapely.geometry import Point
-from offline_folium import offline
 import folium
-from folium.plugins import MousePosition, MarkerCluster
+from folium.plugins import MarkerCluster, BeautifyIcon
 from ..Utils.nest_db import *
-
 
 
 ########################################
@@ -115,13 +113,6 @@ def setup_map():
         attr='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
         name='Terrain (OpenTopoMap)'
     ).add_to(m)
-
-    # Add MousePosition plugin
-    MousePosition(
-        position='bottomright',
-        separator=', ',
-        prefix='Coordinates:'
-    ).add_to(m)
     
     return m
 
@@ -138,10 +129,17 @@ def add_events_to_map(m, gdf):
 
         popup_text = f"Buoy ID: {buoy_id}"
 
-        # Create a marker with a popup (bindPopup ensures markers are recognized)
+        # Create a marker with a beautified icon
+        icon = BeautifyIcon(
+            icon='info-sign', 
+            border_color='#00ABDC', 
+            text_color='#00ABDC', 
+            background_color='white'
+        )
         marker = folium.Marker(
             location=[lat, lng],
-            popup=popup_text
+            popup=popup_text,
+            icon=icon
         )
 
         marker.add_to(marker_cluster)
@@ -172,10 +170,19 @@ def get_buoys_from_db():
             f"Drop Time: {drop_time}"
         )
 
+        # Create a beautified icon for buoy markers
+        icon = BeautifyIcon(
+            icon='info-sign', 
+            border_color='green', 
+            text_color='green', 
+            background_color='white'
+        )
+
         marker = folium.Marker(
             location=[lat, lon],
             popup=popup_text,
-            tooltip="Click for details"
+            tooltip="Click for details",
+            icon=icon
         )
         markers.append(marker)
 

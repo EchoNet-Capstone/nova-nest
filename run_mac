@@ -16,6 +16,7 @@ fi
 source env/bin/activate
 
 # Run the NestUi Python module
+python3 -m offline_folium
 python3 -m NestUi
 
 # Deactivate the virtual environment
