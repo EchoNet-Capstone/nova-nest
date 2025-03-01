@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 import serial.tools.list_ports
 from ..Utils.nest_serial import send_packet
+from ..Utils.networking import *
 
 class NuiSerialWidget(QWidget):
     def __init__(self, parent=None):
@@ -31,7 +32,7 @@ class NuiSerialWidget(QWidget):
         self.ttl_combo.setCurrentIndex(0)
         floc_layout.addWidget(self.ttl_combo, 0, 1)
 
-        # Type: Dropdown 0-15 (default 1; note 0-3 are defined types)
+        # Type: Dropdown 0-15 (default 1; note 1-3 are defined types)
         floc_layout.addWidget(QLabel("Type:"), 1, 0)
         self.type_combo = QComboBox()
         self.type_combo.addItems([str(i) for i in range(0, 16)])
@@ -143,7 +144,12 @@ class NuiSerialWidget(QWidget):
         self.port_combo.clear()
         self.port_combo.addItems(port_list)
 
-    def build_floc_packet(self) -> bytes:
+    def create_floc_packet(self) -> bytes:
+        """
+        Build a FLOC packet using the generated Scapy classes.
+        Depending on the 'Type' field, an appropriate header is instantiated.
+        Any additional data from the UI is added as payload.
+        """
         # Retrieve values from the UI fields
         ttl = int(self.ttl_combo.currentText())
         type_val = int(self.type_combo.currentText())
@@ -165,24 +171,8 @@ class NuiSerialWidget(QWidget):
             raise ValueError("SRC must be a valid number.")
         data_str = self.data_edit.text()[:56]  # enforce 56-character max
 
-        # Construct the FLOC packet:
-        # TTL (4 bits) and Type (4 bits) are packed into one byte.
-        first_byte = ((ttl & 0x0F) << 4) | (type_val & 0x0F)
-        nid_bytes = nid.to_bytes(2, byteorder='big')
-        reserved = 0  # 2 bits reserved
-        pid_byte = ((reserved & 0x03) << 6) | (pid & 0x3F)
-        dst_bytes = dst.to_bytes(2, byteorder='big')
-        src_bytes = src.to_bytes(2, byteorder='big')
-        data_bytes = data_str.encode('ascii')
-        floc_packet = bytes([first_byte]) + nid_bytes + bytes([pid_byte]) + dst_bytes + src_bytes + data_bytes
-        return floc_packet
+        return build_floc_packet(ttl, type_val, nid, pid, dst, src, data_str)
 
-    def build_nest_to_burd_packet(self, floc_packet: bytes) -> bytes:
-        # NeST packet: CMD ID (1 byte) is ASCII 'B'; then size (1 byte) followed by FLOC packet.
-        cmd_id = ord('B')
-        size = len(floc_packet)
-        packet = bytes([cmd_id, size]) + floc_packet
-        return packet
 
     def update_packet_display(self):
         try:

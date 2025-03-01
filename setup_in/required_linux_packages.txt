@@ -2,3 +2,4 @@ python3-venv
 python3-qtpy
 postgresql
 postgresql-contrib
+libclang-dev

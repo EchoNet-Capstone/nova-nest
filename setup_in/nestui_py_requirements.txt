@@ -6,3 +6,5 @@ folium
 geopandas
 matplotlib
 prisma
+scapy
+clang==14

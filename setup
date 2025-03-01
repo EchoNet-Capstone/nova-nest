@@ -36,13 +36,17 @@ done
 
 ROOT_DIR=$(pwd)
 PROGRAM_DIR="$ROOT_DIR/NestUi"
-SETUP_IN_DR="$ROOT_DIR/setup_in"
-SETUP_OUT_DIR="$ROOT_DIR/setup_out"
+SETUP_IN_DIR="$ROOT_DIR/setup_in"
+FLOC_DIR="$ROOT_DIR/nova-floc"
 
-REQ_PCKGS_FILE="$SETUP_IN_DR/required_linux_packages.txt"
-POSS_LIBS_FILE="$SETUP_IN_DR/possible_libs_not_found.txt"
-USR_SETUP_FILE="$SETUP_IN_DR/postgres_burd_db_settings.txt"
-PY_PCKGS_FILE="$SETUP_IN_DR/nestui_py_requirements.txt"
+REQ_PCKGS_FILE="$SETUP_IN_DIR/required_linux_packages.txt"
+POSS_LIBS_FILE="$SETUP_IN_DIR/possible_libs_not_found.txt"
+USR_SETUP_FILE="$SETUP_IN_DIR/postgres_burd_db_settings.txt"
+PY_PCKGS_FILE="$SETUP_IN_DIR/nestui_py_requirements.txt"
+
+GEN_FLOC_CLASSES_FILE="$FLOC_DIR/generate_scapy_clang.py"
+FLOC_HPP="$FLOC_DIR/floc.hpp"
+FLOC_PY="$PROGRAM_DIR/Utils/nest_floc.py"
 
 echo "Installing required packages..."
 
@@ -215,6 +219,10 @@ if [ $CREATE_DB == 1 ]; then
 	verbose_echo "Migrating with prisma..."
 	my_prisma migrate dev --name init
 fi
+
+echo "Creating FLOC packet classes..."
+
+python $GEN_FLOC_CLASSES_FILE $FLOC_HPP $FLOC_PY
 
 deactivate
 
