@@ -6,7 +6,8 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 import serial.tools.list_ports
 from ..Utils.nest_serial import send_packet
-from ..Utils.networking import *
+from ..Utils.networking import build_floc_packet, build_serial_floc_packet
+from scapy.all import Packet
 
 class NuiSerialWidget(QWidget):
     def __init__(self, parent=None):
@@ -171,31 +172,31 @@ class NuiSerialWidget(QWidget):
             raise ValueError("SRC must be a valid number.")
         data_str = self.data_edit.text()[:56]  # enforce 56-character max
 
-        return build_floc_packet(ttl, type_val, nid, pid, dst, src, data_str)
+        return build_floc_packet(ttl, type_val, nid, pid, dst, src, data_str.encode('ascii'))
 
 
     def update_packet_display(self):
         try:
-            floc_packet = self.build_floc_packet()
+            floc_packet = self.create_floc_packet()
         except ValueError as e:
             self.packetdata_edit.setPlainText("Error: " + str(e))
             return
 
-        nest_packet = self.build_nest_to_burd_packet(floc_packet)
+        nest_packet = build_serial_floc_packet(floc_packet)
         self.datasize_edit.setText(str(len(floc_packet)))
         # Display the packet data in hexadecimal for readability
         self.packetdata_edit.setPlainText(nest_packet.hex().upper())
 
     def on_send_packet(self):
         try:
-            floc_packet = self.build_floc_packet()
+            floc_packet = self.create_floc_packet()
         except ValueError as e:
             self.packetdata_edit.setPlainText("Error: " + str(e))
             return
 
-        nest_packet: bytes = self.build_nest_to_burd_packet(floc_packet)
+        nest_packet = build_serial_floc_packet(floc_packet)
         # Prepend '$' and append "\r\n" to the packet
-        full_packet: bytes = b"$" + nest_packet + b"\r\n"
+        full_packet = b"$" + nest_packet + b"\r\n"
         serial_port = self.port_combo.currentText()
         try:
             baud_rate = int(self.baud_combo.currentText())
