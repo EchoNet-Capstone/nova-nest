@@ -105,6 +105,72 @@ class BuoyLegendWidget(QWidget):
         row_layout.addWidget(icon_label)
         row_layout.addWidget(text_label)
         return container
+    
+class BuoyLegendWidget(QWidget):
+    """
+    A horizontal legend bar with a black background.
+    It has a "Legend:" label and multiple sub-items
+    for different battery states (color-coded or icons).
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Black background, thin gray border
+        self.setStyleSheet("""
+            background-color: black;
+            border: 1px solid #ccc;
+        """)
+
+        # Build the UI
+        self._init_ui()
+
+    def _init_ui(self):
+        """
+        Build the legend layout:
+          - "Legend:" label
+          - 3 sub-hboxes for Low/Medium/High battery
+        """
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(10, 5, 10, 5)
+        main_layout.setSpacing(15)
+
+        # A "Legend:" label, styled white/bold
+        legend_label = QLabel("Legend:")
+        legend_label.setStyleSheet("color: white; font-weight: bold;")
+        main_layout.addWidget(legend_label)
+
+        # Add each legend item as a small HBox
+        main_layout.addWidget(self._create_legend_item_color("red", "Low Battery (< 20%)"))
+        main_layout.addWidget(self._create_legend_item_color("yellow", "Medium Battery (20–50%)"))
+        main_layout.addWidget(self._create_legend_item_color("green", "High Battery (> 50%)"))
+
+        # Stretch at the end to push items to the left
+        main_layout.addStretch(1)
+
+    def _create_legend_item_color(self, color, text):
+        """
+        Creates a small horizontal container with:
+          - A colored circle
+          - A descriptive label
+        """
+        container = QWidget()
+        row_layout = QHBoxLayout(container)
+        row_layout.setContentsMargins(0, 0, 0, 0)
+        row_layout.setSpacing(6)
+
+        icon_label = QLabel()
+        icon_label.setFixedSize(18, 18)
+        icon_label.setStyleSheet(
+            f"background-color: {color}; "
+            "border-radius: 9px; "  # circle shape
+            "border: 1px solid black;"
+        )
+
+        text_label = QLabel(text)
+        text_label.setStyleSheet("color: white;")  # White text on black background
+
+        row_layout.addWidget(icon_label)
+        row_layout.addWidget(text_label)
+        return container
 
 
 class NestGeoMapLegendOverlayWidget(QWidget):
@@ -122,8 +188,7 @@ class NestGeoMapLegendOverlayWidget(QWidget):
 
         # 2) The overlay legend panel
         self.legend_panel = BuoyLegendWidget(self)
-        # Adjust the legend’s fixed height as you like
-        self.legend_panel.setFixedHeight(60)
+        self.legend_panel.setFixedHeight(60)  # Adjust as needed
 
         # We do not use a standard layout here, because we want the legend
         # to overlay the map. Instead, we’ll position them in resizeEvent.
