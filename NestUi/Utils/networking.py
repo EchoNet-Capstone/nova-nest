@@ -1,6 +1,5 @@
 # packet_builder.py (VARIABLE LENGTH DATA)
-from floc_pkts import *  # Import the generated file
-from scapy.all import raw, Raw
+from ..Utils.floc_pkts import *  # Import the generated file
 
 MAX_DATA_SIZE = 55
 MAX_COMMAND_SIZE = 51
