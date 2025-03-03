@@ -267,32 +267,19 @@ class NuiSerialWidget(QWidget):
                                  ack_pid_val=ack_pid_val,
                                  rsp_pid_val=rsp_pid_val)
 
-    def update_packet_display(self):
-        try:
-            floc_packet = self.create_floc_packet()
-        except ValueError as e:
-            self.packetdata_edit.setPlainText("Error: " + str(e))
-            return
-
-        try:
-            serial_type_val = self.serial_type_combo.currentText()[0]
-            if serial_type_val.upper() == "U":
-                try:
-                    dest_addr = int(self.dest_addr_edit.text())
-                except ValueError:
-                    raise ValueError("Destination Address must be a valid number for Unicast.")
-            else:
-                dest_addr = -1
-            nest_packet = build_serial_floc_packet(floc_packet, serial_type_val, dest_addr)
-        except ValueError as e:
-            self.packetdata_edit.setPlainText("Error: " + str(e))
-            return
-
-        self.datasize_edit.setText(str(len(floc_packet)))
-        # Use the Scapy-style packet for dissection.
-        pkt = SerialFlocPacket(nest_packet)
-        dissection = pkt.show(dump=True)
-        self.packetdata_edit.setPlainText(dissection)
+    def read_serial_data(self):
+        if self.serial_conn and self.serial_conn.in_waiting:
+            try:
+                data = self.serial_conn.read(self.serial_conn.in_waiting)
+                if data:
+                    # If all bytes are ASCII, decode as ASCII; otherwise use Latin-1.
+                    if all(b < 128 for b in data):
+                        decoded = data.decode('ascii')
+                    else:
+                        decoded = data.decode('latin1')
+                    self.append_monitor_text(decoded, role="received")
+            except Exception as e:
+                self.append_monitor_text("Error reading serial data: " + str(e), role="info")
 
     def on_send_packet(self):
         try:
@@ -315,8 +302,6 @@ class NuiSerialWidget(QWidget):
             self.packetdata_edit.setPlainText("Error: " + str(e))
             return
 
-        # full_packet is used for sending; note that the dissection on the left panel
-        # does not include the '$' and CRLF.
         full_packet = b"$" + nest_packet + b"\r\n"
         serial_port = self.port_combo.currentText()
         try:
@@ -325,16 +310,22 @@ class NuiSerialWidget(QWidget):
             self.packetdata_edit.setPlainText("Invalid baud rate!")
             return
 
+        # Determine decoding method for displaying the sent packet:
+        if all(b < 128 for b in full_packet):
+            sent_text = full_packet.decode('ascii')
+        else:
+            sent_text = full_packet.decode('latin1')
+
         if self.serial_conn is not None:
             try:
                 self.serial_conn.write(full_packet)
-                self.append_monitor_text(full_packet.decode('latin1', errors='replace'), role="sent")
+                self.append_monitor_text(sent_text, role="sent")
             except Exception as e:
-                self.append_monitor_text("Error sending packet: " + str(e))
+                self.append_monitor_text("Error sending packet: " + str(e), role="info")
                 return
         else:
-            if send_packet(serial_port, baud_rate, full_packet, self.serial_conn):
-                self.append_monitor_text(full_packet.decode('latin1', errors='replace'), role="sent")
+            if send_packet(serial_port, baud_rate, full_packet, ser=self.serial_conn):
+                self.append_monitor_text(sent_text, role="sent")
 
         try:
             current_pid = int(self.pid_edit.text())
@@ -342,7 +333,7 @@ class NuiSerialWidget(QWidget):
             current_pid = 0
         new_pid = (current_pid + 1) % 64
         self.pid_edit.setText(str(new_pid))
-
+        
     def toggle_serial_connection(self):
         if self.serial_conn is None:
             serial_port = self.port_combo.currentText()
