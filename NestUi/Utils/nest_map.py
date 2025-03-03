@@ -174,7 +174,8 @@ def get_buoys_from_db():
         # Create a beautified icon for buoy markers with color based on battery level
         icon = BeautifyIcon(
             icon='info-sign', 
-            border_color=color, 
+            border_width= 1,
+            border_color='black', 
             text_color=color, 
             background_color=color
         )
