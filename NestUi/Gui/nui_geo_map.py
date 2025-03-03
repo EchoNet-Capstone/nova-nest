@@ -2,7 +2,7 @@ import os
 from PySide6.QtWidgets import (
     QWidget, QFrame, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QSizePolicy
 )
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QColor
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEnginePage
 from PySide6.QtCore import Qt, Signal
@@ -37,10 +37,14 @@ class NestGeoMapWidget(QWidget):
         self.web_view = QWebEngineView()
         self.web_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.web_page = WebEnginePage(self)
+        self.web_page.setBackgroundColor(QColor('#efefef'))
         self.web_view.setPage(self.web_page)
 
         map_html = get_html_map()  # Generates and writes the HTML map to disk
         self.web_view.setHtml(map_html)
+        
+        layout.setSpacing(0)
+        layout.setContentsMargins(0,0,0,0)
         layout.addWidget(self.web_view)
 
     def on_marker_click(self, buoy_id):
@@ -79,7 +83,7 @@ class CustomBuoyLegendWidget(QFrame):
             }
         """)
         self._init_ui()
-        self.setFixedWidth(self.sizeHint().width())
+        self.setFixedSize(self.sizeHint())
 
     def _init_ui(self):
         layout = QGridLayout(self)
@@ -183,8 +187,6 @@ class NestGeoMapLegendOverlayWidget(QWidget):
         self.map_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.legend_panel = CustomBuoyLegendWidget(self)
-        # Adjust the height to accommodate the items
-        self.legend_panel.setFixedHeight(160)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
