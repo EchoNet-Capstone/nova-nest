@@ -218,41 +218,22 @@ class NuiSerialWidget(QWidget):
         self.port_combo.addItems(port_list)
 
     def update_floc_type_fields(self):
-        """
-        Show/hide extra fields based on the selected FLOC packet type.
-        For:
-         - Data (0): no extra fields.
-         - Command (1): show command type.
-         - Ack (2): show ack pid and disable data.
-         - Response (3): show response pid.
-        """
         type_str = self.type_combo.currentText()
         type_val = int(type_str.split(":")[0])
-        # Command packet
         self.cmd_type_label.setVisible(type_val == 1)
         self.cmd_type_combo.setVisible(type_val == 1)
-        # Ack packet
         self.ack_pid_label.setVisible(type_val == 2)
         self.ack_pid_edit.setVisible(type_val == 2)
-        # Response packet
         self.rsp_pid_label.setVisible(type_val == 3)
         self.rsp_pid_edit.setVisible(type_val == 3)
-        # Disable Data field for Ack packets
         self.data_edit.setEnabled(type_val != 2)
 
     def update_serial_type_fields(self):
-        """
-        Show/hide the destination address field based on the serial type.
-        """
         serial_type_str = self.serial_type_combo.currentText()
         self.dest_addr_label.setVisible(serial_type_str.startswith("U"))
         self.dest_addr_edit.setVisible(serial_type_str.startswith("U"))
 
     def create_floc_packet(self) -> bytes:
-        """
-        Build a FLOC packet using the generated Scapy classes.
-        Depending on the packet type selected, extra parameters may be included.
-        """
         ttl = int(self.ttl_combo.currentText())
         type_val = int(self.type_combo.currentText().split(":")[0])
         try:
@@ -272,14 +253,12 @@ class NuiSerialWidget(QWidget):
         except ValueError:
             raise ValueError("SRC must be a valid number.")
 
-        # For Data, Command, and Response packets, get the data field.
         if type_val == 2:
             data_bytes = b""
         else:
-            data_str = self.data_edit.text()[:56]  # enforce 56-character max
+            data_str = self.data_edit.text()[:56]
             data_bytes = data_str.encode('ascii')
 
-        # Extra fields based on packet type:
         cmd_type_val = -1
         ack_pid_val = -1
         rsp_pid_val = -1
@@ -313,7 +292,7 @@ class NuiSerialWidget(QWidget):
             return
 
         try:
-            serial_type_val = self.serial_type_combo.currentText()[0]  # "B" or "U"
+            serial_type_val = self.serial_type_combo.currentText()[0]
             if serial_type_val.upper() == "U":
                 try:
                     dest_addr = int(self.dest_addr_edit.text())
@@ -337,7 +316,7 @@ class NuiSerialWidget(QWidget):
             return
 
         try:
-            serial_type_val = self.serial_type_combo.currentText()[0]  # "B" or "U"
+            serial_type_val = self.serial_type_combo.currentText()[0]
             if serial_type_val.upper() == "U":
                 try:
                     dest_addr = int(self.dest_addr_edit.text())
@@ -358,19 +337,18 @@ class NuiSerialWidget(QWidget):
             self.packetdata_edit.setPlainText("Invalid baud rate!")
             return
 
-        # If a persistent connection is open, use it; otherwise, fallback to send_packet()
         if self.serial_conn is not None:
             try:
                 self.serial_conn.write(full_packet)
-                self.append_monitor_text("Sent: " + full_packet.hex().upper())
+                # Directly decode without additional formatting (using latin1 to preserve bytes)
+                self.append_monitor_text("Sent: " + full_packet.decode('latin1', errors='replace'))
             except Exception as e:
                 self.append_monitor_text("Error sending packet: " + str(e))
                 return
         else:
             if send_packet(serial_port, baud_rate, full_packet):
-                self.append_monitor_text("Sent: " + full_packet.hex().upper())
+                self.append_monitor_text("Sent: " + full_packet.decode('latin1', errors='replace'))
 
-        # Update the PID only after a successful send
         try:
             current_pid = int(self.pid_edit.text())
         except ValueError:
@@ -379,9 +357,6 @@ class NuiSerialWidget(QWidget):
         self.pid_edit.setText(str(new_pid))
 
     def toggle_serial_connection(self):
-        """
-        Open or close the persistent serial connection and start/stop monitoring.
-        """
         if self.serial_conn is None:
             serial_port = self.port_combo.currentText()
             try:
@@ -404,19 +379,14 @@ class NuiSerialWidget(QWidget):
             self.serial_toggle_button.setText("Open Serial Port")
 
     def read_serial_data(self):
-        """
-        Called periodically by the timer to check for incoming serial data.
-        """
         if self.serial_conn and self.serial_conn.in_waiting:
             try:
                 data = self.serial_conn.read(self.serial_conn.in_waiting)
                 if data:
-                    self.append_monitor_text("Received: " + data.hex().upper())
+                    # Instead of custom formatting, decode directly (latin1 preserves byte-to-character mapping)
+                    self.append_monitor_text("Received: " + data.decode('latin1', errors='replace'))
             except Exception as e:
                 self.append_monitor_text("Error reading serial data: " + str(e))
 
     def append_monitor_text(self, text):
-        """
-        Append a line of text to the serial monitor text area.
-        """
         self.monitor_text.append(text)
