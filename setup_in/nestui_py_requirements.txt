@@ -7,4 +7,5 @@ geopandas
 matplotlib
 prisma
 scapy
-clang==14
+offline_folium
+setuptools

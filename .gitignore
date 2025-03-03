@@ -7,6 +7,9 @@ setup_out
 __pycache__
 env
 
+#offline folium stuff
+map_dep
+
 #prisma stuff
 .env
 migrations/
