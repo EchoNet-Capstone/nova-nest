@@ -2,7 +2,6 @@ import geopandas as gpd
 import requests
 import socket
 from shapely.geometry import Point
-from offline_folium import offline
 import folium
 from folium.plugins import MarkerCluster, BeautifyIcon
 from ..Utils.nest_db import *
@@ -106,7 +105,7 @@ def setup_map():
     the coordinates as a list (e.g., [lat, lng]) and with alert=True.
     """
     # Center map at a default location (e.g., [0, 0]). Adjust zoom as needed.
-    m = folium.Map(location=[0, 0], zoom_start=2)
+    m = folium.Map(location=[0, 0], zoom_start=5, control_scale=True)
     
     return m
 
@@ -123,17 +122,9 @@ def add_events_to_map(m, gdf):
 
         popup_text = f"Buoy ID: {buoy_id}"
 
-        # Create a marker with a beautified icon
-        icon = BeautifyIcon(
-            icon='info-sign', 
-            border_color='#00ABDC', 
-            text_color='#00ABDC', 
-            background_color='white'
-        )
         marker = folium.Marker(
             location=[lat, lng],
-            popup=popup_text,
-            icon=icon
+            popup=popup_text
         )
 
         marker.add_to(marker_cluster)
@@ -164,12 +155,28 @@ def get_buoys_from_db():
             f"Drop Time: {drop_time}"
         )
 
-        # Create a beautified icon for buoy markers
+        # Determine icon color based on battery level
+        try:
+            battery_level = float(battery)
+        except (ValueError, TypeError):
+            battery_level = None
+
+        if battery_level is not None:
+            if battery_level <= 20:
+                color = 'red'
+            elif battery_level <= 50:
+                color = 'yellow'
+            else:
+                color = 'green'
+        else:
+            color = 'green'
+
+        # Create a beautified icon for buoy markers with color based on battery level
         icon = BeautifyIcon(
             icon='info-sign', 
-            border_color='green', 
-            text_color='green', 
-            background_color='white'
+            border_color=color, 
+            text_color=color, 
+            background_color=color
         )
 
         marker = folium.Marker(

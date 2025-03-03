@@ -1,5 +1,4 @@
-from PySide6.QtWidgets import QWidget, QGridLayout, QLabel, QFrame
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QWidget, QGridLayout, QLabel
 
 from .StatusWidgets import *
 
