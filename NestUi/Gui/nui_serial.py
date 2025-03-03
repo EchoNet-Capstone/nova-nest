@@ -352,6 +352,7 @@ class NuiSerialWidget(QWidget):
             current_pid = 0
         new_pid = (current_pid + 1) % 64
         self.pid_edit.setText(str(new_pid))
+        self.update_packet_display()
 
     def toggle_serial_connection(self):
         if self.serial_conn is None:
