@@ -343,18 +343,8 @@ class NuiSerialWidget(QWidget):
         else:
             sent_text = full_packet.decode('latin1')
 
-        if self.serial_conn is not None:
-            try:
-                self.serial_conn.write(full_packet)
-                self.append_monitor_text(sent_text, role="sent")
-            except Exception as e:
-                self.append_monitor_text("Error sending packet: " + str(e), role="info")
-                return
-        else:
-            # Pass self as the parent so the QMessageBox popups show up correctly.
-            if send_packet(serial_port, baud_rate, full_packet, ser=self.serial_conn, parent=self):
-                self.append_monitor_text(sent_text, role="sent")
-
+        if send_packet(serial_port, baud_rate, full_packet, ser=self.serial_conn, parent=self):
+            self.append_monitor_text(sent_text, role="sent")
 
         try:
             current_pid = int(self.pid_edit.text())
