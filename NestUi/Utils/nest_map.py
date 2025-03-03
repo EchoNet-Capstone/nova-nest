@@ -3,9 +3,8 @@ import requests
 import socket
 from shapely.geometry import Point
 import folium
-from folium.plugins import MousePosition, MarkerCluster
+from folium.plugins import MarkerCluster, BeautifyIcon
 from ..Utils.nest_db import *
-
 
 
 ########################################
@@ -100,27 +99,13 @@ def setup_map():
     Create and return a folium map with:
       - OpenStreetMap tile layer (with attribution)
       - MousePosition to display current coordinates
-      - ClickForLatLng plugin to copy coordinates to the clipboard.
+      - ClickForLatLng plugin to copy coordifnates to the clipboard.
     
     The ClickForLatLng plugin is configured with a format string that outputs 
     the coordinates as a list (e.g., [lat, lng]) and with alert=True.
     """
     # Center map at a default location (e.g., [0, 0]). Adjust zoom as needed.
-    m = folium.Map(location=[0, 0], zoom_start=2)
-    
-    # Add Terrain layer (using OpenTopoMap as an alternative)
-    folium.TileLayer(
-        tiles='https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-        attr='Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)',
-        name='Terrain (OpenTopoMap)'
-    ).add_to(m)
-
-    # Add MousePosition plugin
-    MousePosition(
-        position='bottomright',
-        separator=', ',
-        prefix='Coordinates:'
-    ).add_to(m)
+    m = folium.Map(location=[0, 0], zoom_start=5, control_scale=True)
     
     return m
 
@@ -137,7 +122,6 @@ def add_events_to_map(m, gdf):
 
         popup_text = f"Buoy ID: {buoy_id}"
 
-        # Create a marker with a popup (bindPopup ensures markers are recognized)
         marker = folium.Marker(
             location=[lat, lng],
             popup=popup_text
@@ -171,10 +155,35 @@ def get_buoys_from_db():
             f"Drop Time: {drop_time}"
         )
 
+        # Determine icon color based on battery level
+        try:
+            battery_level = float(battery)
+        except (ValueError, TypeError):
+            battery_level = None
+
+        if battery_level is not None:
+            if battery_level <= 20:
+                color = 'red'
+            elif battery_level <= 50:
+                color = 'yellow'
+            else:
+                color = 'green'
+        else:
+            color = 'green'
+
+        # Create a beautified icon for buoy markers with color based on battery level
+        icon = BeautifyIcon(
+            icon='info-sign', 
+            border_color=color, 
+            text_color=color, 
+            background_color=color
+        )
+
         marker = folium.Marker(
             location=[lat, lon],
             popup=popup_text,
-            tooltip="Click for details"
+            tooltip="Click for details",
+            icon=icon
         )
         markers.append(marker)
 

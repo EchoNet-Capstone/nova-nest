@@ -20,13 +20,13 @@ async def seed():
             {
                 "lat": 40.7128,
                 "long": -74.0060,
-                "battery": 80,
+                "battery": 40,
                 "drop_time": datetime(2025, 2, 18, 11, 0, 0)
             },
             {
                 "lat": 34.0522,
                 "long": -118.2437,
-                "battery": 70,
+                "battery": 10,
                 "drop_time": datetime(2025, 2, 17, 14, 15, 0)
             }
         ]
