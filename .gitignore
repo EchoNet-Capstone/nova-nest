@@ -10,4 +10,3 @@ env
 #prisma stuff
 .env
 migrations/
-NestUi/Utils/floc_pkts.py
