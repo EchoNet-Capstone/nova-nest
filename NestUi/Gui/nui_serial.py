@@ -3,11 +3,12 @@ from PySide6.QtWidgets import (
     QGroupBox, QVBoxLayout, QHBoxLayout, QTextEdit, QMessageBox
 )
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QColor, QTextCursor
 import serial.tools.list_ports
 import serial
 from ..Utils.nest_serial import send_packet
 from ..Utils.networking import build_floc_packet, build_serial_floc_packet
+from ..Utils.floc_pkts import SerialFlocPacket
 
 class NuiSerialWidget(QWidget):
     def __init__(self, parent=None):
@@ -19,7 +20,7 @@ class NuiSerialWidget(QWidget):
         # Persistent serial connection and timer for monitoring
         self.serial_conn = None
         self.monitor_timer = QTimer(self)
-        self.monitor_timer.setInterval(200)  # 200 ms interval for checking incoming data
+        self.monitor_timer.setInterval(200)  # 200 ms for checking incoming data
         self.monitor_timer.timeout.connect(self.read_serial_data)
         
         self.init_ui()
@@ -28,10 +29,10 @@ class NuiSerialWidget(QWidget):
         self.update_serial_type_fields()
 
     def init_ui(self):
-        # Create a horizontal layout to hold two panels: left (existing UI) and right (serial monitor)
+        # Create a horizontal layout with two panels: left (packet builder/dissection) and right (serial monitor)
         main_layout = QHBoxLayout(self)
         
-        # ------ Left Panel: Existing UI -------
+        # ------ Left Panel: Packet Builder & Dissector -------
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         
@@ -39,14 +40,12 @@ class NuiSerialWidget(QWidget):
         floc_group = QGroupBox("FLOC Packet")
         floc_layout = QGridLayout()
 
-        # TTL: Dropdown 1-15 (default 1)
         floc_layout.addWidget(QLabel("TTL:"), 0, 0)
         self.ttl_combo = QComboBox()
         self.ttl_combo.addItems([str(i) for i in range(1, 16)])
         self.ttl_combo.setCurrentIndex(0)
         floc_layout.addWidget(self.ttl_combo, 0, 1)
 
-        # Type: Dropdown for FLOC packet type: 0: Data, 1: Command, 2: Ack, 3: Response
         floc_layout.addWidget(QLabel("Packet Type:"), 1, 0)
         self.type_combo = QComboBox()
         self.type_combo.addItems([
@@ -59,13 +58,11 @@ class NuiSerialWidget(QWidget):
         self.type_combo.currentIndexChanged.connect(self.update_floc_type_fields)
         floc_layout.addWidget(self.type_combo, 1, 1)
 
-        # PID: Editable field (max 2 digits). Default value "0".
         floc_layout.addWidget(QLabel("PID:"), 2, 0)
         self.pid_edit = QLineEdit("0")
         self.pid_edit.setMaxLength(2)
         floc_layout.addWidget(self.pid_edit, 2, 1)
 
-        # NID: Editable ComboBox (up to 5 digits) with dropdown for previous entries
         floc_layout.addWidget(QLabel("NID:"), 3, 0)
         self.nid_combo = QComboBox()
         self.nid_combo.setEditable(True)
@@ -74,7 +71,6 @@ class NuiSerialWidget(QWidget):
         self.nid_combo.lineEdit().setMaxLength(5)
         floc_layout.addWidget(self.nid_combo, 3, 1)
 
-        # DST: Editable ComboBox (up to 5 digits) with dropdown for previous entries
         floc_layout.addWidget(QLabel("DST:"), 4, 0)
         self.dst_combo = QComboBox()
         self.dst_combo.setEditable(True)
@@ -83,7 +79,6 @@ class NuiSerialWidget(QWidget):
         self.dst_combo.lineEdit().setMaxLength(5)
         floc_layout.addWidget(self.dst_combo, 4, 1)
 
-        # SRC: Editable ComboBox (up to 5 digits) with dropdown for previous entries
         floc_layout.addWidget(QLabel("SRC:"), 5, 0)
         self.src_combo = QComboBox()
         self.src_combo.setEditable(True)
@@ -92,14 +87,12 @@ class NuiSerialWidget(QWidget):
         self.src_combo.lineEdit().setMaxLength(5)
         floc_layout.addWidget(self.src_combo, 5, 1)
 
-        # Data: Text input field (up to 56 characters, not required for Ack)
         floc_layout.addWidget(QLabel("Data:"), 6, 0)
         self.data_edit = QLineEdit()
         self.data_edit.setMaxLength(56)
         floc_layout.addWidget(self.data_edit, 6, 1, 1, 2)
 
         # Additional fields for specific packet types:
-        # Command Type (only for Command packets)
         self.cmd_type_label = QLabel("Command Type:")
         self.cmd_type_combo = QComboBox()
         self.cmd_type_combo.addItems([
@@ -110,14 +103,12 @@ class NuiSerialWidget(QWidget):
         floc_layout.addWidget(self.cmd_type_label, 7, 0)
         floc_layout.addWidget(self.cmd_type_combo, 7, 1)
 
-        # Ack PID (only for Ack packets)
         self.ack_pid_label = QLabel("Ack PID:")
         self.ack_pid_edit = QLineEdit()
         self.ack_pid_edit.setMaxLength(2)
         floc_layout.addWidget(self.ack_pid_label, 8, 0)
         floc_layout.addWidget(self.ack_pid_edit, 8, 1)
 
-        # Response PID (only for Response packets)
         self.rsp_pid_label = QLabel("Response PID:")
         self.rsp_pid_edit = QLineEdit()
         self.rsp_pid_edit.setMaxLength(2)
@@ -127,24 +118,21 @@ class NuiSerialWidget(QWidget):
         floc_group.setLayout(floc_layout)
         left_layout.addWidget(floc_group)
 
-        # ---------- NeST to BuRD Packet Group ----------
-        nest_group = QGroupBox("NeST to BuRD Packet")
+        # ---------- NeST to BuRD Packet Group (Dissection) ----------
+        nest_group = QGroupBox("NeST to BuRD Packet Dissection")
         nest_layout = QGridLayout()
 
-        # CMD ID: Non-editable field showing "B - Broadcast"
         nest_layout.addWidget(QLabel("CMD ID:"), 0, 0)
         self.cmd_id_edit = QLineEdit("B - Broadcast")
         self.cmd_id_edit.setReadOnly(True)
         nest_layout.addWidget(self.cmd_id_edit, 0, 1)
 
-        # DataSize: Non-editable field to show FLOC packet size
         nest_layout.addWidget(QLabel("DataSize:"), 1, 0)
         self.datasize_edit = QLineEdit()
         self.datasize_edit.setReadOnly(True)
         nest_layout.addWidget(self.datasize_edit, 1, 1)
 
-        # Data: Scrollable text field (read-only) for the NeST to BuRD packet data.
-        nest_layout.addWidget(QLabel("Data:"), 2, 0)
+        nest_layout.addWidget(QLabel("Dissection:"), 2, 0)
         self.packetdata_edit = QTextEdit()
         self.packetdata_edit.setReadOnly(True)
         self.packetdata_edit.setMaximumWidth(600)
@@ -157,27 +145,23 @@ class NuiSerialWidget(QWidget):
         serial_group = QGroupBox("Serial Configuration")
         serial_layout = QGridLayout()
 
-        # Serial Port: Dropdown showing active serial ports
         serial_layout.addWidget(QLabel("Serial Port:"), 0, 0)
         self.port_combo = QComboBox()
         self.refresh_serial_ports()
         serial_layout.addWidget(self.port_combo, 0, 1)
 
-        # Baud Rate: Dropdown with common baud rates
         serial_layout.addWidget(QLabel("Baud Rate:"), 1, 0)
         self.baud_combo = QComboBox()
         self.baud_combo.addItems(["4800", "9600", "19200", "38400", "57600", "115200"])
         self.baud_combo.setCurrentText("9600")
         serial_layout.addWidget(self.baud_combo, 1, 1)
 
-        # Serial Type: Dropdown for Broadcast or Unicast
         serial_layout.addWidget(QLabel("Serial Type:"), 2, 0)
         self.serial_type_combo = QComboBox()
         self.serial_type_combo.addItems(["B - Broadcast", "U - Unicast"])
         self.serial_type_combo.currentIndexChanged.connect(self.update_serial_type_fields)
         serial_layout.addWidget(self.serial_type_combo, 2, 1)
 
-        # Destination Address for Unicast (only visible when Serial Type is U)
         self.dest_addr_label = QLabel("Dest Address:")
         self.dest_addr_edit = QLineEdit()
         self.dest_addr_edit.setMaxLength(5)
@@ -192,7 +176,6 @@ class NuiSerialWidget(QWidget):
         self.update_button = QPushButton("Update Packet")
         self.update_button.clicked.connect(self.update_packet_display)
         button_layout.addWidget(self.update_button)
-
         self.send_button = QPushButton("Send Packet")
         self.send_button.clicked.connect(self.on_send_packet)
         button_layout.addWidget(self.send_button)
@@ -306,7 +289,10 @@ class NuiSerialWidget(QWidget):
             return
 
         self.datasize_edit.setText(str(len(floc_packet)))
-        self.packetdata_edit.setPlainText(nest_packet.hex().upper())
+        # Use the Scapy-style packet for dissection.
+        pkt = SerialFlocPacket(nest_packet)
+        dissection = pkt.show(dump=True)
+        self.packetdata_edit.setPlainText(dissection)
 
     def on_send_packet(self):
         try:
@@ -329,6 +315,8 @@ class NuiSerialWidget(QWidget):
             self.packetdata_edit.setPlainText("Error: " + str(e))
             return
 
+        # full_packet is used for sending; note that the dissection on the left panel
+        # does not include the '$' and CRLF.
         full_packet = b"$" + nest_packet + b"\r\n"
         serial_port = self.port_combo.currentText()
         try:
@@ -340,14 +328,13 @@ class NuiSerialWidget(QWidget):
         if self.serial_conn is not None:
             try:
                 self.serial_conn.write(full_packet)
-                # Directly decode without additional formatting (using latin1 to preserve bytes)
-                self.append_monitor_text("Sent: " + full_packet.decode('latin1', errors='replace'))
+                self.append_monitor_text(full_packet.decode('latin1', errors='replace'), role="sent")
             except Exception as e:
                 self.append_monitor_text("Error sending packet: " + str(e))
                 return
         else:
-            if send_packet(serial_port, baud_rate, full_packet):
-                self.append_monitor_text("Sent: " + full_packet.decode('latin1', errors='replace'))
+            if send_packet(serial_port, baud_rate, full_packet, self.serial_conn):
+                self.append_monitor_text(full_packet.decode('latin1', errors='replace'), role="sent")
 
         try:
             current_pid = int(self.pid_edit.text())
@@ -383,10 +370,18 @@ class NuiSerialWidget(QWidget):
             try:
                 data = self.serial_conn.read(self.serial_conn.in_waiting)
                 if data:
-                    # Instead of custom formatting, decode directly (latin1 preserves byte-to-character mapping)
-                    self.append_monitor_text("Received: " + data.decode('latin1', errors='replace'))
+                    self.append_monitor_text(data.decode('latin1', errors='replace'), role="received")
             except Exception as e:
                 self.append_monitor_text("Error reading serial data: " + str(e))
-
-    def append_monitor_text(self, text):
-        self.monitor_text.append(text)
+    
+    def append_monitor_text(self, text, role="info"):
+        # Set text color based on message role.
+        if role == "sent":
+            color = QColor("blue")
+        elif role == "received":
+            color = QColor("green")
+        else:
+            color = QColor("black")
+        self.monitor_text.setTextColor(color)
+        self.monitor_text.insertPlainText(text)
+        self.monitor_text.moveCursor(QTextCursor.End)
