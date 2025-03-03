@@ -1,10 +1,11 @@
 from PySide6.QtWidgets import (
     QWidget, QLabel, QComboBox, QLineEdit, QPushButton, QGridLayout,
-    QGroupBox, QVBoxLayout, QHBoxLayout, QTextEdit
+    QGroupBox, QVBoxLayout, QHBoxLayout, QTextEdit, QMessageBox
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
 import serial.tools.list_ports
+import serial
 from ..Utils.nest_serial import send_packet
 from ..Utils.networking import build_floc_packet, build_serial_floc_packet
 
@@ -15,14 +16,25 @@ class NuiSerialWidget(QWidget):
         font.setPointSize(9)
         self.setFont(font)
         
+        # Persistent serial connection and timer for monitoring
+        self.serial_conn = None
+        self.monitor_timer = QTimer(self)
+        self.monitor_timer.setInterval(200)  # 200 ms interval for checking incoming data
+        self.monitor_timer.timeout.connect(self.read_serial_data)
+        
         self.init_ui()
         # Initialize field visibilities based on current selections
         self.update_floc_type_fields()
         self.update_serial_type_fields()
 
     def init_ui(self):
-        main_layout = QVBoxLayout(self)
-
+        # Create a horizontal layout to hold two panels: left (existing UI) and right (serial monitor)
+        main_layout = QHBoxLayout(self)
+        
+        # ------ Left Panel: Existing UI -------
+        left_panel = QWidget()
+        left_layout = QVBoxLayout(left_panel)
+        
         # ---------- FLOC Packet Group ----------
         floc_group = QGroupBox("FLOC Packet")
         floc_layout = QGridLayout()
@@ -87,7 +99,6 @@ class NuiSerialWidget(QWidget):
         floc_layout.addWidget(self.data_edit, 6, 1, 1, 2)
 
         # Additional fields for specific packet types:
-
         # Command Type (only for Command packets)
         self.cmd_type_label = QLabel("Command Type:")
         self.cmd_type_combo = QComboBox()
@@ -114,7 +125,7 @@ class NuiSerialWidget(QWidget):
         floc_layout.addWidget(self.rsp_pid_edit, 9, 1)
 
         floc_group.setLayout(floc_layout)
-        main_layout.addWidget(floc_group)
+        left_layout.addWidget(floc_group)
 
         # ---------- NeST to BuRD Packet Group ----------
         nest_group = QGroupBox("NeST to BuRD Packet")
@@ -140,7 +151,7 @@ class NuiSerialWidget(QWidget):
         nest_layout.addWidget(self.packetdata_edit, 2, 1, 1, 2)
 
         nest_group.setLayout(nest_layout)
-        main_layout.addWidget(nest_group)
+        left_layout.addWidget(nest_group)
 
         # ---------- Serial Configuration Group ----------
         serial_group = QGroupBox("Serial Configuration")
@@ -174,7 +185,7 @@ class NuiSerialWidget(QWidget):
         serial_layout.addWidget(self.dest_addr_edit, 3, 1)
 
         serial_group.setLayout(serial_layout)
-        main_layout.addWidget(serial_group)
+        left_layout.addWidget(serial_group)
 
         # ---------- Control Buttons ----------
         button_layout = QHBoxLayout()
@@ -185,7 +196,20 @@ class NuiSerialWidget(QWidget):
         self.send_button = QPushButton("Send Packet")
         self.send_button.clicked.connect(self.on_send_packet)
         button_layout.addWidget(self.send_button)
-        main_layout.addLayout(button_layout)
+        left_layout.addLayout(button_layout)
+        
+        main_layout.addWidget(left_panel)
+        
+        # ------ Right Panel: Serial Monitor -------
+        monitor_group = QGroupBox("Serial Monitor")
+        monitor_layout = QVBoxLayout(monitor_group)
+        self.serial_toggle_button = QPushButton("Open Serial Port")
+        self.serial_toggle_button.clicked.connect(self.toggle_serial_connection)
+        monitor_layout.addWidget(self.serial_toggle_button)
+        self.monitor_text = QTextEdit()
+        self.monitor_text.setReadOnly(True)
+        monitor_layout.addWidget(self.monitor_text)
+        main_layout.addWidget(monitor_group)
 
     def refresh_serial_ports(self):
         ports = serial.tools.list_ports.comports()
@@ -202,7 +226,6 @@ class NuiSerialWidget(QWidget):
          - Ack (2): show ack pid and disable data.
          - Response (3): show response pid.
         """
-        # Get selected type value from the combo. Format is "N: Description"
         type_str = self.type_combo.currentText()
         type_val = int(type_str.split(":")[0])
         # Command packet
@@ -214,7 +237,7 @@ class NuiSerialWidget(QWidget):
         # Response packet
         self.rsp_pid_label.setVisible(type_val == 3)
         self.rsp_pid_edit.setVisible(type_val == 3)
-        # Data field is not needed for Ack packets
+        # Disable Data field for Ack packets
         self.data_edit.setEnabled(type_val != 2)
 
     def update_serial_type_fields(self):
@@ -222,7 +245,6 @@ class NuiSerialWidget(QWidget):
         Show/hide the destination address field based on the serial type.
         """
         serial_type_str = self.serial_type_combo.currentText()
-        # If Unicast is selected, show dest address; hide otherwise.
         self.dest_addr_label.setVisible(serial_type_str.startswith("U"))
         self.dest_addr_edit.setVisible(serial_type_str.startswith("U"))
 
@@ -251,7 +273,6 @@ class NuiSerialWidget(QWidget):
             raise ValueError("SRC must be a valid number.")
 
         # For Data, Command, and Response packets, get the data field.
-        # For Ack packets, data is not used.
         if type_val == 2:
             data_bytes = b""
         else:
@@ -264,19 +285,16 @@ class NuiSerialWidget(QWidget):
         rsp_pid_val = -1
 
         if type_val == 1:
-            # Command packet: get command type from combo (format "N: DESCRIPTION")
             try:
                 cmd_type_val = int(self.cmd_type_combo.currentText().split(":")[0])
             except ValueError:
                 raise ValueError("Invalid Command Type value.")
         elif type_val == 2:
-            # Ack packet: get ack PID
             try:
                 ack_pid_val = int(self.ack_pid_edit.text())
             except ValueError:
                 raise ValueError("Ack PID must be a valid number.")
         elif type_val == 3:
-            # Response packet: get response PID
             try:
                 rsp_pid_val = int(self.rsp_pid_edit.text())
             except ValueError:
@@ -295,7 +313,6 @@ class NuiSerialWidget(QWidget):
             return
 
         try:
-            # Get serial packet options from UI:
             serial_type_val = self.serial_type_combo.currentText()[0]  # "B" or "U"
             if serial_type_val.upper() == "U":
                 try:
@@ -310,7 +327,6 @@ class NuiSerialWidget(QWidget):
             return
 
         self.datasize_edit.setText(str(len(floc_packet)))
-        # Display the packet data in hexadecimal for readability
         self.packetdata_edit.setPlainText(nest_packet.hex().upper())
 
     def on_send_packet(self):
@@ -334,7 +350,6 @@ class NuiSerialWidget(QWidget):
             self.packetdata_edit.setPlainText("Error: " + str(e))
             return
 
-        # Prepend '$' and append "\r\n" to the packet
         full_packet = b"$" + nest_packet + b"\r\n"
         serial_port = self.port_combo.currentText()
         try:
@@ -343,12 +358,65 @@ class NuiSerialWidget(QWidget):
             self.packetdata_edit.setPlainText("Invalid baud rate!")
             return
 
-        if send_packet(serial_port, baud_rate, full_packet):
-            self.packetdata_edit.setPlainText("Sent: " + full_packet.hex().upper())
-            # Update the PID only after a successful send
+        # If a persistent connection is open, use it; otherwise, fallback to send_packet()
+        if self.serial_conn is not None:
             try:
-                current_pid = int(self.pid_edit.text())
+                self.serial_conn.write(full_packet)
+                self.append_monitor_text("Sent: " + full_packet.hex().upper())
+            except Exception as e:
+                self.append_monitor_text("Error sending packet: " + str(e))
+                return
+        else:
+            if send_packet(serial_port, baud_rate, full_packet):
+                self.append_monitor_text("Sent: " + full_packet.hex().upper())
+
+        # Update the PID only after a successful send
+        try:
+            current_pid = int(self.pid_edit.text())
+        except ValueError:
+            current_pid = 0
+        new_pid = (current_pid + 1) % 64
+        self.pid_edit.setText(str(new_pid))
+
+    def toggle_serial_connection(self):
+        """
+        Open or close the persistent serial connection and start/stop monitoring.
+        """
+        if self.serial_conn is None:
+            serial_port = self.port_combo.currentText()
+            try:
+                baud_rate = int(self.baud_combo.currentText())
             except ValueError:
-                current_pid = 0
-            new_pid = (current_pid + 1) % 64
-            self.pid_edit.setText(str(new_pid))
+                self.append_monitor_text("Invalid baud rate!")
+                return
+            try:
+                self.serial_conn = serial.Serial(serial_port, baud_rate, timeout=0.2)
+                self.append_monitor_text("Opened serial port: " + serial_port)
+                self.serial_toggle_button.setText("Close Serial Port")
+                self.monitor_timer.start()
+            except Exception as e:
+                self.append_monitor_text("Error opening serial port: " + str(e))
+        else:
+            self.monitor_timer.stop()
+            self.serial_conn.close()
+            self.serial_conn = None
+            self.append_monitor_text("Closed serial port")
+            self.serial_toggle_button.setText("Open Serial Port")
+
+    def read_serial_data(self):
+        """
+        Called periodically by the timer to check for incoming serial data.
+        """
+        if self.serial_conn and self.serial_conn.in_waiting:
+            try:
+                data = self.serial_conn.read(self.serial_conn.in_waiting)
+                if data:
+                    self.append_monitor_text("Received: " + data.hex().upper())
+            except Exception as e:
+                self.append_monitor_text("Error reading serial data: " + str(e))
+
+    def append_monitor_text(self, text):
+        """
+        Append a line of text to the serial monitor text area.
+        """
+        self.monitor_text.append(text)
