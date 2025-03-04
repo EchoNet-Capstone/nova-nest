@@ -26,7 +26,6 @@ class NestBurdStatusDockWidget(QScrollArea):
             self.buoy_id = buoy_id
     
     def toggle_visible(self, buoy_id):
-        print(f'toggle visible ({self.isVisible()}) from {buoy_id}')
         if self.buoy_id == buoy_id or self.buoy_id == -1:
             visible = self.isVisible()
             if visible:
