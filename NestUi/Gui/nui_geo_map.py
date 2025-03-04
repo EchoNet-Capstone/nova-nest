@@ -1,154 +1,195 @@
 import os
-from PySide6.QtWidgets import QVBoxLayout, QWidget, QSizePolicy, QLabel, QHBoxLayout
-from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import (
+    QWidget, QFrame, QHBoxLayout, QGridLayout, QLabel
+)
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtWebEngineCore import QWebEnginePage
-from PySide6.QtCore import Qt, Signal
-from folium import Element
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
+from PySide6.QtCore import Qt, Signal, QUrl
+from folium import Element, Map
 from jinja2 import Template
-from ..Utils.nest_map import *
+from ..Utils.nest_map import *  # Replace with your actual import
 
+# --------------------------------------------------------------------
+# Custom WebEnginePage to capture JS marker clicks
+# --------------------------------------------------------------------
 class WebEnginePage(QWebEnginePage):
+    marker_clicked = Signal(str)
     def javaScriptConsoleMessage(self, level, msg, line, sourceID):
-        # Check if the message is our marker click signal.
         if msg.startswith("markerClicked:"):
             buoy_id = msg.split("markerClicked:")[1]
             print(f"✅ Received Buoy ID from JS: {buoy_id}")
-            # Call the parent's handler for marker clicks.
-            self.parent().on_marker_click(buoy_id)
+            self.marker_clicked.emit(buoy_id)
         else:
-            # Otherwise, print normally.
             print(f"JavaScript Console [{level}]: {msg}")
 
-class NestGeoMapWidget(QWidget):
-    markerClicked = Signal(str)
-    """PySide6 Widget for displaying a Folium map in QWebEngineView without using WebChannel."""
+# --------------------------------------------------------------------
+# Main Map Widget
+# --------------------------------------------------------------------
+class NestGeoMapWidget(QWebEngineView):
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
 
     def init_ui(self):
-        layout = QVBoxLayout(self)
-        # Create QWebEngineView with custom page
-        self.web_view = QWebEngineView()
-        self.web_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.web_page = WebEnginePage(self)
-        self.web_view.setPage(self.web_page)
 
-        # Write the HTML map to disk and load it as a file URL
-        map_html = get_html_map()  # This writes "clickable_map.html" to disk.
-        self.web_view.setHtml(map_html)
-        layout.addWidget(self.web_view)
+        self.setPage(self.web_page)
+        self.load(QUrl.fromLocalFile(get_html_map()))
+        self.page().settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
 
-    def on_marker_click(self, buoy_id):
-        print(f"✅ Buoy Marker Clicked: {buoy_id}")
-        self.markerClicked.emit(buoy_id)
-
-from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout, QLabel, QSizePolicy
-)
-from PySide6.QtCore import Qt, QRect
-from PySide6.QtGui import QPixmap
-
-# Replace these imports with your actual modules:
-# from .nui_geo_map import NestGeoMapWidget
-
-class BuoyLegendWidget(QWidget):
+# --------------------------------------------------------------------
+# Custom Legend Widget as a QFrame
+# --------------------------------------------------------------------
+class CustomBuoyLegendWidget(QFrame):
     """
-    A simple horizontal legend with color-coded or icon-based items.
-    Overlays the map at the bottom.
+    Desired Legend layout (single border, one horizontal line after header,
+    one vertical line separating columns):
+
+    +------------------------------------------------------------------+
+    | LEGEND                                                           |
+    |------------------------------------------------------------------|
+    | [Blue Box] My Ship           | [Green Circle] Good               |
+    | [Black Circle] Selected BuRD | [Yellow Circle] Battery Below 50% |
+    |                              | [Red Circle] Battery Below 20%    |
+    +------------------------------------------------------------------+
+
+    The whole legend box now has its own white background and a single
+    border. No extra borders around individual rows or cells.
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Example styling: semi-transparent light background, a thin border
+        # Set an outer border & white background
+        # Increase the width so all text fits comfortably
         self.setStyleSheet("""
-            background-color: black;
-            border: 1px solid #ccc;
+            QFrame {
+                background-color: #efefef;
+                border: 1px solid black;
+                margin: 0px;
+                padding: 0px;
+            }
         """)
-
-        # We’ll create a horizontal layout in code (below) to place items side by side
         self._init_ui()
+        self.setFixedSize(self.sizeHint())
 
     def _init_ui(self):
-        """
-        Build out the layout with your legend items (color squares, icons, etc.).
-        """
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 5, 10, 5)
-        layout.setSpacing(15)
+        layout = QGridLayout(self)
+        # Minimal spacing so we don’t see extra boxes around rows
+        layout.setVerticalSpacing(0)
+        layout.setHorizontalSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        # Example: color-coded circles
-        layout.addWidget(self._create_legend_item_color("red", "Low Battery (< 20%)"))
-        layout.addWidget(self._create_legend_item_color("yellow", "Medium Battery (20–50%)"))
-        layout.addWidget(self._create_legend_item_color("green", "High Battery (> 50%)"))
+        # 2) Horizontal separator below header
+        h_separator = QFrame()
+        h_separator.setFrameShape(QFrame.HLine)
+        # We make it a thin black line
+        h_separator.setStyleSheet("""
+            QFrame {
+                background-color: black;
+                border: none;
+                margin: 0px;
+                padding: 0px;
+            }
+        """)
+        h_separator.setFixedHeight(1)
+        # Span all columns
+        layout.addWidget(h_separator, 1, 0, 1, 1)
+
+        # Helper function to create a thin vertical separator
+        def vertical_separator():
+            sep = QFrame()
+            sep.setFrameShape(QFrame.VLine)
+            sep.setStyleSheet("""
+                QFrame {
+                    background-color: black;
+                    border: none;
+                    margin: 0px;
+                    padding: 0px;
+                }
+            """)
+            sep.setFixedWidth(1)
+            return sep
+        
+        layout.addWidget(vertical_separator(), 0, 1, 4, 1)
+
+        # Row 1: Left: Legend Label; Right: [Green Circle] Good
+        header_label = QLabel("Legend")
+        header_label.setStyleSheet("border: none; padding-left: 6px; margin-right 6px; font-weight: bold; background: transparent;")
+        layout.addWidget(header_label, 0, 0, alignment=Qt.AlignLeft)
+        right_item_row0 = self._create_legend_item("green", "Good", shape="circle")
+        layout.addWidget(right_item_row0, 0, 2, 2, 1, alignment=Qt.AlignLeft)
+
+        # Row 2: Left: [Blue Box] My Ship; Right: [Yellow Circle] Battery Below 50%
+        left_item_row2 = self._create_legend_item("blue", "My Ship", shape="square")
+        right_item_row2 = self._create_legend_item("yellow", "Battery Below 50%", shape="circle")
+        layout.addWidget(left_item_row2, 2, 0, alignment=Qt.AlignLeft)
+        layout.addWidget(right_item_row2, 2, 2, alignment=Qt.AlignLeft)
+
+        # Row 3: Left: [Black Circle] Selected BuRD; Right: [Red Circle] Battery Below 20%
+        left_item_row3 = self._create_legend_item("black", "Selected BuRD", shape="circle")
+        layout.addWidget(left_item_row3, 3, 0, alignment=Qt.AlignLeft)
+        right_item_row3 = self._create_legend_item("red", "Battery Below 20%", shape="circle")
+        layout.addWidget(right_item_row3, 3, 2, alignment=Qt.AlignLeft)
+
+        # Row 4: Left is empty; 
 
 
-    def _create_legend_item_color(self, color, text):
+    def _create_legend_item(self, color, text, shape="circle"):
         """
-        Creates a small color-coded circle plus a text label in a row.
+        Creates a horizontal container with:
+          - A small colored shape (circle or square)
+          - A text label
         """
         container = QWidget()
-        row_layout = QHBoxLayout(container)
-        row_layout.setContentsMargins(0, 0, 0, 0)
-        row_layout.setSpacing(6)
+        container.setStyleSheet("background: transparent; border: none;")
+        h_layout = QHBoxLayout(container)
+        h_layout.setContentsMargins(6, 0, 0, 0)
+        h_layout.setSpacing(0)
 
         icon_label = QLabel()
-        icon_label.setFixedSize(18, 18)
-        icon_label.setStyleSheet(
-            f"background-color: {color}; "
-            "border-radius: 8px; "  # circle shape
-            "border: 1px solid black;"
-        )
+        icon_label.setFixedSize(20, 20)
+        # No border around the shape
+        if shape == "circle":
+            icon_label.setStyleSheet(f"background-color: {color}; border: 1px solid black; border-radius: 10px;")
+        else:
+            icon_label.setStyleSheet(f"background-color: {color}; border: 1px solid black;")
 
         text_label = QLabel(text)
+        text_label.setStyleSheet("margin-right: 6px; color: black; background: transparent;")
 
-        row_layout.addWidget(icon_label)
-        row_layout.addWidget(text_label)
+        h_layout.addWidget(icon_label)
+        h_layout.addWidget(text_label)
         return container
 
-
+# --------------------------------------------------------------------
+# Composite Widget Combining Map and Legend
+# --------------------------------------------------------------------
 class NestGeoMapLegendOverlayWidget(QWidget):
     """
-    Composite widget that:
-      - Contains a NestGeoMapWidget (the QWebEngine map)
-      - Overlays a BuoyLegendWidget at the bottom
+    Displays the Folium map and overlays the legend at the bottom left.
     """
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        # 1) The QWebEngine-based map widget
         self.map_view = NestGeoMapWidget(self)
-        self.map_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        # 2) The overlay legend panel
-        self.legend_panel = BuoyLegendWidget(self)
-        # Adjust the legend’s fixed height as you like
-        self.legend_panel.setFixedHeight(60)
-
-        # We do not use a standard layout here, because we want the legend
-        # to overlay the map. Instead, we’ll position them in resizeEvent.
+        self.legend_panel = CustomBuoyLegendWidget(self)
 
     def resizeEvent(self, event):
-        """
-        Manually size and position the map to fill the entire widget,
-        and place the legend at the bottom, spanning the same width.
-        """
-        super().resizeEvent(event)
         w = self.width()
         h = self.height()
-
-        # The map fills all available space
         self.map_view.setGeometry(0, 0, w, h)
 
-        # The legend overlays the bottom
+        legend_width = self.legend_panel.width()
         legend_height = self.legend_panel.height()
-        self.legend_panel.setGeometry(0, h - legend_height, w, legend_height)
+        # Position the legend at the bottom-left corner
+        self.legend_panel.setGeometry(0, h - legend_height, legend_width, legend_height)
+        return super().resizeEvent(event)
 
-def add_external_js(map_object, js_file_path):
-    """
-    Reads an external JavaScript file, renders it as a Jinja2 template with the
-    map instance variable, and injects the resulting script into the map's header.
-    """
+# --------------------------------------------------------------------
+# Helper Functions for Folium Map
+# --------------------------------------------------------------------
+def add_external_js(map_object:Map, js_file_path):
     if os.path.exists(js_file_path):
         with open(js_file_path, "r", encoding="utf-8") as f:
             js_raw = f.read()
@@ -162,28 +203,19 @@ def add_external_js(map_object, js_file_path):
     return map_object
 
 def get_html_map():
-    """Generates an HTML map using Folium and injects external JavaScript for marker events."""
     folium_map = setup_map()
-
-    # Inject external JavaScript; note that the JS file should use our custom URL scheme.
-    js_path = "NestUi/Utils/js/mapInteractions.js"  # Adjust the path as needed.
+    js_path = "NestUi/Utils/js/mapInteractions.js"  # Adjust path if needed
     folium_map = add_external_js(folium_map, js_path)
-
     markers = get_buoys_from_db()
     for marker in markers:
         marker.add_to(folium_map)
 
-    # Generate HTML string from the map.
-    map_html = folium_map._repr_html_()
+    folium_map.get_root().height = "100%"
 
-    # Define the file path and create directory if it doesn't exist.
-    file_name = "NestUi/Gui/map_dep/clickable_map.html"
+    file_name = os.getcwd() + "/NestUi/Gui/map_dep/clickable_map.html"
     directory = os.path.dirname(file_name)
     os.makedirs(directory, exist_ok=True)
+    folium_map.save(file_name)
 
-    # Write the map HTML to the file.
-    with open(file_name, "w", encoding="utf-8") as file:
-        file.write(map_html)
     print(f"✅ Clickable map saved to {os.path.abspath(file_name)}")
-
-    return map_html
+    return file_name

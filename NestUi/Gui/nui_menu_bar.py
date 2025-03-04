@@ -4,21 +4,22 @@ from PySide6.QtCore import QObject
 from .nui_serial import *
 
 class NuiMenuOption():
-    def __init__(self, widget:QWidget, trigger_func:object, shortcut:str=None):
+    def __init__(self, widget:QWidget, trigger_func:object, shortcut:str=None, parent:QObject=None):
         self.widget: QWidget = widget
         self.trigger_func: object = trigger_func
         self.action: QAction = None
         self.shortcut: str = shortcut
+        self.parent: QObject = parent
 
 class NestMenuBar(QMenuBar):
 
     def __init__(self, parent):
         super().__init__(parent)
-         
-        self.is_fullscreen = False
+        
+        self.setNativeMenuBar(False)
         
         self.serial_widget = NuiSerialWidget()
-    	
+
         '''
         Top Level dictionary contains the menu bar menu title and it's submenu 
         dictionary
@@ -41,7 +42,8 @@ class NestMenuBar(QMenuBar):
                     NuiMenuOption(
                         None,
                         self.parent().close,
-                        "Ctrl+Q")
+                        "Ctrl+Q",
+                        parent=self.parent())
             },
             'View':
             {
@@ -49,7 +51,8 @@ class NestMenuBar(QMenuBar):
                     NuiMenuOption(
                         None,
                         self.toggle_fullscreen,
-                        "F11")  
+                        "F11",
+                        parent=self.parent())  
             },
             'Help':
             {}
@@ -98,6 +101,9 @@ class NestMenuBar(QMenuBar):
                     curr_opt: NuiMenuOption = self.menu_widgets[curr_menu_title][menu_opt]
                     
                     curr_opt.action = QAction(menu_opt, curr_menu)
+                    if curr_opt.parent:
+                        curr_opt.parent.addAction(curr_opt.action)
+
                     curr_menu.addAction(curr_opt.action)
                     
                     if curr_opt.trigger_func:
@@ -125,14 +131,12 @@ class NestMenuBar(QMenuBar):
             curr_menu_opt.widget.show()
             triggered = True
 
-        if not triggered:
-            print(f'Widget {text} hasn\'t been initialized yet!')
+        if not triggered and not curr_menu_opt.trigger_func:
+            print(f'Action {text} hasn\'t been initialized yet!')
     
     def toggle_fullscreen(self):
-        if self.is_fullscreen:
+        if self.parent().isFullScreen():
             self.parent().showNormal()
         else:
             self.parent().showFullScreen()
-            
-        self.is_fullscreen = not self.is_fullscreen
 

@@ -6,5 +6,6 @@ folium
 geopandas
 matplotlib
 prisma
+scapy
 offline_folium
 setuptools

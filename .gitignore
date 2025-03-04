@@ -3,7 +3,6 @@
 *.code-workspace
 setup_out
 
-
 #python stuff
 __pycache__
 env
