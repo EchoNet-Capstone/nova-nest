@@ -1,56 +1,42 @@
 import os
 from PySide6.QtWidgets import (
-    QWidget, QFrame, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QSizePolicy
+    QWidget, QFrame, QHBoxLayout, QGridLayout, QLabel
 )
-from PySide6.QtGui import QColor
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtWebEngineCore import QWebEnginePage
-from PySide6.QtCore import Qt, Signal
-from folium import Element
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
+from PySide6.QtCore import Qt, Signal, QUrl
+from folium import Element, Map
 from jinja2 import Template
 from ..Utils.nest_map import *  # Replace with your actual import
-from branca.element import Figure
 
 # --------------------------------------------------------------------
 # Custom WebEnginePage to capture JS marker clicks
 # --------------------------------------------------------------------
 class WebEnginePage(QWebEnginePage):
+    marker_clicked = Signal(str)
     def javaScriptConsoleMessage(self, level, msg, line, sourceID):
         if msg.startswith("markerClicked:"):
             buoy_id = msg.split("markerClicked:")[1]
             print(f"✅ Received Buoy ID from JS: {buoy_id}")
-            self.parent().on_marker_click(buoy_id)
+            self.marker_clicked.emit(buoy_id)
         else:
             print(f"JavaScript Console [{level}]: {msg}")
 
 # --------------------------------------------------------------------
 # Main Map Widget
 # --------------------------------------------------------------------
-class NestGeoMapWidget(QWidget):
-    markerClicked = Signal(str)
+class NestGeoMapWidget(QWebEngineView):
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
 
     def init_ui(self):
-        layout = QVBoxLayout(self)
-        self.web_view = QWebEngineView(self)
-        self.web_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.web_page = WebEnginePage(self)
-        self.web_page.setBackgroundColor(QColor('#efefef'))
-        self.web_view.setPage(self.web_page)
 
-        map_html = get_html_map()  # Generates and writes the HTML map to disk
-        self.web_view.setHtml(map_html)
-        
-        layout.setSpacing(0)
-        layout.setContentsMargins(0,0,0,0)
-        layout.addWidget(self.web_view)
-
-    def on_marker_click(self, buoy_id):
-        print(f"✅ Buoy Marker Clicked: {buoy_id}")
-        self.markerClicked.emit(buoy_id)
+        self.setPage(self.web_page)
+        self.load(QUrl.fromLocalFile(get_html_map()))
+        self.page().settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
 
 # --------------------------------------------------------------------
 # Custom Legend Widget as a QFrame
@@ -184,9 +170,8 @@ class NestGeoMapLegendOverlayWidget(QWidget):
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.map_view = NestGeoMapWidget(self)
 
-        self.map_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.map_view = NestGeoMapWidget(self)
 
         self.legend_panel = CustomBuoyLegendWidget(self)
 
@@ -204,7 +189,7 @@ class NestGeoMapLegendOverlayWidget(QWidget):
 # --------------------------------------------------------------------
 # Helper Functions for Folium Map
 # --------------------------------------------------------------------
-def add_external_js(map_object, js_file_path):
+def add_external_js(map_object:Map, js_file_path):
     if os.path.exists(js_file_path):
         with open(js_file_path, "r", encoding="utf-8") as f:
             js_raw = f.read()
@@ -221,18 +206,16 @@ def get_html_map():
     folium_map = setup_map()
     js_path = "NestUi/Utils/js/mapInteractions.js"  # Adjust path if needed
     folium_map = add_external_js(folium_map, js_path)
-    folium_map.get_root().height = "100%"
     markers = get_buoys_from_db()
     for marker in markers:
         marker.add_to(folium_map)
 
-    map_html = folium_map._repr_html_()
+    folium_map.get_root().height = "100%"
 
-    file_name = "NestUi/Gui/map_dep/clickable_map.html"
+    file_name = os.getcwd() + "/NestUi/Gui/map_dep/clickable_map.html"
     directory = os.path.dirname(file_name)
     os.makedirs(directory, exist_ok=True)
-    with open(file_name, "w", encoding="utf-8") as file:
-        file.write(map_html)
+    folium_map.save(file_name)
 
     print(f"✅ Clickable map saved to {os.path.abspath(file_name)}")
-    return map_html
+    return file_name

@@ -1,7 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QScrollArea, QSizePolicy, QVBoxLayout
 )
-from .nui_burd_status_main_widget import NestBurdStatusMainWidget
 from .nui_geo_map import NestGeoMapLegendOverlayWidget
 
 
