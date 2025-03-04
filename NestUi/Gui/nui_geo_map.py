@@ -9,6 +9,7 @@ from PySide6.QtCore import Qt, Signal
 from folium import Element
 from jinja2 import Template
 from ..Utils.nest_map import *  # Replace with your actual import
+from branca.element import Figure
 
 # --------------------------------------------------------------------
 # Custom WebEnginePage to capture JS marker clicks
@@ -34,8 +35,8 @@ class NestGeoMapWidget(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout(self)
-        self.web_view = QWebEngineView()
-        self.web_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.web_view = QWebEngineView(self)
+        self.web_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.web_page = WebEnginePage(self)
         self.web_page.setBackgroundColor(QColor('#efefef'))
         self.web_view.setPage(self.web_page)
@@ -184,7 +185,8 @@ class NestGeoMapLegendOverlayWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.map_view = NestGeoMapWidget(self)
-        self.map_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.map_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self.legend_panel = CustomBuoyLegendWidget(self)
 
@@ -219,7 +221,7 @@ def get_html_map():
     folium_map = setup_map()
     js_path = "NestUi/Utils/js/mapInteractions.js"  # Adjust path if needed
     folium_map = add_external_js(folium_map, js_path)
-
+    folium_map.get_root().height = "100%"
     markers = get_buoys_from_db()
     for marker in markers:
         marker.add_to(folium_map)

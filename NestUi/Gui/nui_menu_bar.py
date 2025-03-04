@@ -14,11 +14,12 @@ class NestMenuBar(QMenuBar):
 
     def __init__(self, parent):
         super().__init__(parent)
-         
+        
+        self.setNativeMenuBar(False)
         self.is_fullscreen = False
         
         self.serial_widget = NuiSerialWidget()
-    	
+
         '''
         Top Level dictionary contains the menu bar menu title and it's submenu 
         dictionary

@@ -15,16 +15,6 @@ class NestMainWidget(QWidget):
 
         # 1) Left side: the map + overlay legend
         self.burd_map_overlay = NestGeoMapLegendOverlayWidget(self)
-        main_layout.addWidget(self.burd_map_overlay, 4)
-
-        # 2) Right side: a scrollable status panel
-        burd_status_area = QScrollArea()
-        burd_status_area.setWidgetResizable(True)
-        self.burd_status = NestBurdStatusMainWidget(self)
-        burd_status_area.setWidget(self.burd_status)
-        main_layout.addWidget(burd_status_area, 1)
-
-        # If NestGeoMapWidget emits markerClicked, connect it
-        self.burd_map_overlay.map_view.markerClicked.connect(self.burd_status.update_status)
+        main_layout.addWidget(self.burd_map_overlay)
 
         self.setLayout(main_layout)
