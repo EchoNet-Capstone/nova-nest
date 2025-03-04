@@ -1,23 +1,22 @@
-from PySide6.QtWidgets import QWidget, QGridLayout, QLabel, QDockWidget, QScrollArea
+from PySide6.QtWidgets import QGridLayout, QLabel, QScrollArea, QSpacerItem
 from PySide6.QtCore import Qt
 
 from .StatusWidgets import *
 
-class NestBurdStatusDockWidget(QDockWidget):
+class NestBurdStatusDockWidget(QScrollArea):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.buoy_id = -1
         self.init_ui()
 
     def init_ui(self):
-        self.main_widget = QScrollArea(self)
-        self.burd_status_layout = QGridLayout(self.main_widget)
+        self.burd_status_layout = QGridLayout(self)
+        self.burd_status_layout.addWidget(QLabel("BuRD Status"), 0, 0, 1, 1)
         self.status_label = QLabel("Status: Waiting...")
-        self.burd_status_layout.addWidget(self.status_label, 0, 0)
+        self.burd_status_layout.addWidget(self.status_label, 1, 0, 4, 1)
+        self.setLayout(self.burd_status_layout)
         self.setFixedWidth(300)
-        self.setFeatures(QDockWidget.DockWidgetFeature.DockWidgetClosable)
-        self.setWidget(self.main_widget)
-        self.setWindowTitle("Device Status")
+        self.setAutoFillBackground(True)
 
     def update_status(self, buoy_id):
         if(self.isVisible()):
@@ -27,12 +26,11 @@ class NestBurdStatusDockWidget(QDockWidget):
             self.buoy_id = buoy_id
     
     def toggle_visible(self, buoy_id):
+        print(f'toggle visible ({self.isVisible()}) from {buoy_id}')
         if self.buoy_id == buoy_id or self.buoy_id == -1:
             visible = self.isVisible()
             if visible:
-                self.main_widget.setVisible(False)
                 self.setVisible(False)
                 self.buoy_id = -1
             else:
-                self.main_widget.setVisible(True)
                 self.setVisible(True)

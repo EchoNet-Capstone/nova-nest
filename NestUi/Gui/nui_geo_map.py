@@ -176,7 +176,6 @@ class NestGeoMapLegendOverlayWidget(QWidget):
         self.legend_panel = CustomBuoyLegendWidget(self)
 
     def resizeEvent(self, event):
-        super().resizeEvent(event)
         w = self.width()
         h = self.height()
         self.map_view.setGeometry(0, 0, w, h)
@@ -185,6 +184,7 @@ class NestGeoMapLegendOverlayWidget(QWidget):
         legend_height = self.legend_panel.height()
         # Position the legend at the bottom-left corner
         self.legend_panel.setGeometry(0, h - legend_height, legend_width, legend_height)
+        return super().resizeEvent(event)
 
 # --------------------------------------------------------------------
 # Helper Functions for Folium Map
