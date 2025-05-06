@@ -21,8 +21,9 @@ class NestMainWidget(QWidget):
         self.burd_status.resize(self.burd_status.width(), self.height())
         self.burd_status.hide()
 
-        self.burd_map_overlay.map_view.web_page.marker_clicked.connect(self.burd_status.toggle_visible)
-        self.burd_map_overlay.map_view.web_page.marker_clicked.connect(self.burd_status.update_status)
+        # Connect the marker_clicked signal from the map view
+        self.burd_map_overlay.map_view.marker_clicked.connect(self.burd_status.toggle_visible)
+        self.burd_map_overlay.map_view.marker_clicked.connect(self.burd_status.update_status)
 
         self.setLayout(main_layout)
     
