@@ -34,6 +34,8 @@ for arg in "$@"; do
     esac
 done
 
+DOCKER="sudo docker"
+
 ROOT_DIR=$(pwd)
 PROGRAM_DIR="$ROOT_DIR/NestUi"
 SETUP_IN_DIR="$ROOT_DIR/setup_in"
@@ -127,66 +129,98 @@ for line in "${lib_lines[@]}"; do
 	fi
 done
 
-echo "Setting up Posgresql..."
+echo "Setting up Tile Data..."
 
-# check for postgres running
-PG_STATUS=$(sudo service postgresql status|grep "online")
-if [ "" == "$PG_STATUS" ]; then
-	verbose_echo "Postgresql not started... starting"
-	sudo service postgresql start
-fi
+verbose_echo "Setting up .env file..."
 
-verbose_echo "Postgresql started! :)"
+DOT_ENV_FILE="$PROGRAM_DIR/.env"
 
-# setup posgresql server and databse
 DB_USER=$(sed -n '2p' "$USR_SETUP_FILE")
 DB_PASS=$(sed -n '4p' "$USR_SETUP_FILE")
 DB_NAME=$(sed -n '6p' "$USR_SETUP_FILE")
+DB_PORT=$(sed -n '8p' "$USR_SETUP_FILE")
 
-DB_PORT=$(sudo -u postgres psql -t -c "SHOW port;" | xargs)
+echo "DATABASE_URL=\"postgresql://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME?schema=public\"" > $DOT_ENV_FILE
+echo "POSTGRES_USER=$DB_USER" >> $DOT_ENV_FILE
+echo "POSTGRES_PASSWORD=$DB_PASS" >> $DOT_ENV_FILE
+echo "POSTGRES_DB=$DB_NAME" >> $DOT_ENV_FILE
+echo "POSTGRES_PORT=$DB_PORT" >> $DOT_ENV_FILE
 
-PG_USR_EXIST=$(sudo -u postgres psql -c \\du|grep "$DB_USER")
-if [ "" == "$PG_USR_EXIST" ]; then
-	verbose_echo "User $DB_USER not created!... creating user"
-	sudo -u postgres createuser "$DB_USER"
-	sudo -u postgres psql $GEN_QUIET -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';"
+# echo "Checking Docker daemon status..."
+
+# if ! docker info > /dev/null 2>&1; then
+#     verbose_echo "Docker daemon is not running. Attempting to start it..."
+#     sudo systemctl start docker
+
+#     if ! docker info > /dev/null 2>&1; then
+#         echo "❌ ERROR: Failed to start Docker daemon."
+#         echo "Make sure Docker is installed and your user is in the 'docker' group."
+#         exit 1
+#     fi
+
+#     verbose_echo "Docker daemon started successfully!"
+# else
+#     verbose_echo "Docker daemon is already running."
+# fi
+
+# # Ensure Docker starts on boot
+# sudo systemctl enable docker > /dev/null 2>&1
+
+echo "Checking for Docker Compose V2..."
+
+COMPOSE_VERSION=$($DOCKER compose version 2>/dev/null | grep -oE 'v([0-9]+\.)+[0-9]+' || echo "v0.0.0")
+
+if [[ "$COMPOSE_VERSION" < "v2.0.0" ]]; then
+    verbose_echo "Docker Compose V2 not found. Installing CLI plugin..."
+    
+	sudo mkdir -p /usr/local/lib/docker/cli-plugins
+	sudo curl -SL https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-linux-x86_64 \
+	-o /usr/local/lib/docker/cli-plugins/docker-compose
+
+	sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+    verbose_echo "Docker Compose V2 installed locally at ~/.docker/cli-plugins/docker-compose"
 else
-	verbose_echo "User $DB_USER already created! :)"
+    verbose_echo "Docker Compose V2 already available: $COMPOSE_VERSION"
 fi
 
-PG_USER_PERM=$(sudo -u postgres psql -t -c \\du|grep "$DB_USER"|grep "Create")
-if [ "" == "$PG_USER_PERM" ]; then
-	verbose_echo "User $DB_USER doesn't have Create DB perms!... adding"
-	sudo -u postgres psql $GEN_QUIET -c "ALTER USER $DB_USER CREATEDB;"
-fi
+verbose_echo "Starting Docker containers..."
+$DOCKER compose --env-file "$PROGRAM_DIR/.env" up -d
 
-PG_DB_EXIST=$(sudo -u postgres psql -c \\l|grep "$DB_NAME")
+verbose_echo "Waiting for Postgres to be ready..."
+until $DOCKER exec postgres pg_isready -U "$DB_USER" > /dev/null 2>&1; do
+  sleep 1
+done
+
+# Prompt to reset database
+PG_DB_EXIST=$($DOCKER exec -e PGPASSWORD="$DB_PASS" postgres psql -U "$DB_USER" -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'")
 CREATE_DB=0
-if [ "" == "$PG_DB_EXIST" ]; then
-	verbose_echo "Database ($DB_NAME) not created!"
-	CREATE_DB=1
-else
-	PROMPT="Database ($DB_NAME) found! Would you like to reset the current database?"
-	echo "$PROMPT"
-	while true; do
-		read -rp "Enter \"Y\" or \"n/N\" (default): " input
-		if [[ "$input" == "Y" || "$input" =~ ^[nN]$  || "$input" == "" ]]; then
-			break
-		else
-			verbose_echo "Invalid input. Please enter \"Y\" or \"n/N\."
-		fi
-	done
 
-	if [ "$input" == "Y" ]; then
-		verbose_echo "Resetting databse ($DB_NAME)!... deleting database"
-		sudo -u postgres dropdb "$DB_NAME"
-		CREATE_DB=1
-	fi
+if [ "$PG_DB_EXIST" != "1" ]; then
+  verbose_echo "Database ($DB_NAME) not created!"
+  CREATE_DB=1
+else
+  PROMPT="Database ($DB_NAME) found! Would you like to reset the current database?"
+  echo "$PROMPT"
+  while true; do
+    read -rp "Enter \"Y\" or \"n/N\" (default): " input
+    if [[ "$input" == "Y" || "$input" =~ ^[nN]$  || "$input" == "" ]]; then
+      break
+    else
+      verbose_echo "Invalid input. Please enter \"Y\" or \"n/N\"."
+    fi
+  done
+
+  if [ "$input" == "Y" ]; then
+    verbose_echo "Resetting database ($DB_NAME)..."
+    $DOCKER exec -e PGPASSWORD="$DB_PASS" postgres dropdb -U "$DB_USER" "$DB_NAME"
+    CREATE_DB=1
+  fi
 fi
 
-if [ $CREATE_DB == 1 ]; then
-	verbose_echo "Creating database..."
-	sudo -u postgres createdb -O "$DB_USER" "$DB_NAME"
+if [ "$CREATE_DB" == "1" ]; then
+  verbose_echo "Creating database ($DB_NAME)..."
+  $DOCKER exec -e PGPASSWORD="$DB_PASS" postgres createdb -U "$DB_USER" "$DB_NAME"
 fi
 
 echo "Setting up python environment..."
@@ -202,11 +236,6 @@ pip install -r $PY_PCKGS_FILE $GEN_QUIET
 
 echo "Setting up prisma..."
 
-DOT_ENV_FILE="$PROGRAM_DIR/.env"
-
-verbose_echo "Setting up .env file..."
-echo "DATABASE_URL=\"postgresql://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME?schema=public\"" > $DOT_ENV_FILE
-
 my_prisma generate
 
 MIGRATIONS_DIR="$PROGRAM_DIR/prisma/migrations"
@@ -219,10 +248,6 @@ if [ $CREATE_DB == 1 ]; then
 	verbose_echo "Migrating with prisma..."
 	my_prisma migrate dev --name init
 fi
-
-echo "Creating FLOC packet classes..."
-
-python $GEN_FLOC_CLASSES_FILE $FLOC_HPP $FLOC_PY
 
 deactivate
 

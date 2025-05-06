@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REGIONS_JSON="regions.json"
+
+# 1) Validate input
+if [[ $# -ne 1 ]]; then
+  echo "Usage: $0 <region>"
+  echo "Available regions:"
+  jq -r 'keys_unsorted[]' "$REGIONS_JSON" | sed 's/^/  – /'
+  exit 1
+fi
+REGION="$1"
+
+# 2) Lookup URL in JSON (or error)
+PBF_URL=$(jq -r --arg r "$REGION" '.[$r] // empty' "$REGIONS_JSON")
+if [[ -z "$PBF_URL" ]]; then
+  echo "Error: unknown region '$REGION'"
+  echo "Valid regions:"
+  jq -r 'keys_unsorted[]' "$REGIONS_JSON" | sed 's/^/  – /'
+  exit 2
+fi
+
+# 3) Prepare directories & files
+BASE="$(pwd)/$REGION"
+PBF_FILE="$BASE/original.osm.pbf"
+PBF_LAYERS="$BASE/pbf-layers"
+GEOJSON_LAYERS="$BASE/geojson-layers"
+MBTILES_FILE="$BASE/${REGION}.mbtiles"
+
+mkdir -p "$PBF_LAYERS" "$GEOJSON_LAYERS"
+
+# 4) Clean old layer data
+rm -rf "$PBF_LAYERS"/* "$GEOJSON_LAYERS"/*
+
+# 5) Download PBF if missing
+if [[ ! -f "$PBF_FILE" ]]; then
+  echo "Downloading $REGION…"
+  wget -qO "$PBF_FILE" "$PBF_URL"
+else
+  echo "Using existing $PBF_FILE"
+fi
+
+# 6) Define layer filters
+declare -A layer_filters=(
+  [admin]="nwr/boundary=administrative"
+  [maritime]="nwr/boundary=maritime"
+  [coastline]="nwr/natural=coastline"
+  [water]="nwr/natural=water,natural=bay"
+  [landuse]="nwr/landuse=*"
+  [seamark]="nwr/seamark:type=*"
+  [harbor]="nwr/harbour=* nwr/man_made=pier,breakwater"
+  [fishing]="nwr/fishing=crab"
+  [islands]="nwr/place=island"
+)
+
+echo "🦀 Processing region: $REGION"
+
+# 7) Extract & export each layer
+for layer in "${!layer_filters[@]}"; do
+  echo "  • $layer"
+  osmium tags-filter \
+    "$PBF_FILE" \
+    ${layer_filters[$layer]} \
+    -o "$PBF_LAYERS/${layer}.osm.pbf"
+
+  osmium export \
+    -f geojson \
+    "$PBF_LAYERS/${layer}.osm.pbf" \
+    -o "$GEOJSON_LAYERS/${layer}.geojson"
+done
+
+# 8) Collect non-empty GeoJSONs
+mapfile -t valid_geojsons < <(
+  find "$GEOJSON_LAYERS" -name '*.geojson' -print0 |
+  xargs -0 grep -l '"features":\s*\[' || true
+)
+
+# 9) Build MBTiles if any layers present
+if (( ${#valid_geojsons[@]} )); then
+  echo "Generating MBTiles for $REGION…"
+  cmd=( tippecanoe -o "$MBTILES_FILE" -zg --drop-densest-as-needed )
+  for geo in "${valid_geojsons[@]}"; do
+    name="$(basename "$geo" .geojson)"
+    cmd+=( -l "$name" "$geo" )
+  done
+  "${cmd[@]}"
+  echo "✅ $MBTILES_FILE created."
+else
+  echo "⚠️  No valid GeoJSON layers; skipping MBTiles."
+fi
