@@ -17,7 +17,8 @@ class NestMainWindow(QMainWindow):
         self.show_menu_action.triggered.connect(self.toggle_menu_bar)
         
         self.addAction(self.show_menu_action)
-
+        self.central_widget.burd_status.marker_released.connect(self.refresh_map)
+        
     def init_ui(self):
         self.setMenuBar(self.menu_bar)
         self.menu_bar.hide()
@@ -30,6 +31,12 @@ class NestMainWindow(QMainWindow):
     def toggle_menu_bar(self):
         self.menu_bar.setVisible(not self.menu_bar.isVisible())
         
+        self.setVisible(False)
+        self.buoy_id = -1
+
+    def refresh_map(self, buoy_id):
+        # Implement the logic to refresh the map
+        pass
 
         
 

@@ -2,6 +2,7 @@
 .vscode
 *.code-workspace
 setup_out
+tiles
 
 #python stuff
 __pycache__
