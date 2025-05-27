@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REGIONS_JSON="regions.json"
+
+# 1) Validate input
+if [[ $# -ne 1 ]]; then
+  echo "Usage: $0 <region>"
+  echo "Available regions:"
+  jq -r 'keys_unsorted[]' "$REGIONS_JSON" | sed 's/^/  – /'
+  exit 1
+fi
+REGION="$1"
+
+# 2) Lookup URL in JSON (or error)
+PBF_URL=$(jq -r --arg r "$REGION" '.[$r] // empty' "$REGIONS_JSON")
+if [[ -z "$PBF_URL" ]]; then
+  echo "Error: unknown region '$REGION'"
+  echo "Valid regions:"
+  jq -r 'keys_unsorted[]' "$REGIONS_JSON" | sed 's/^/  – /'
+  exit 2
+fi
+
+# 3) Prepare directories & files
+BASE="$(pwd)/$REGION"
+PBF_FILE="$BASE/original.osm.pbf"
+PBF_LAYERS="$BASE/pbf-layers"
+GEOJSON_LAYERS="$BASE/geojson-layers"
+MBTILES_FILE="$BASE/${REGION}.mbtiles"
+STYLE_FILE="$BASE/style.json"
+
+mkdir -p "$PBF_LAYERS" "$GEOJSON_LAYERS"
+
+# 4) Clean old layer data
+rm -rf "$PBF_LAYERS"/* "$GEOJSON_LAYERS"/*
+
+# 5) Download PBF if missing
+if [[ ! -f "$PBF_FILE" ]]; then
+  echo "Downloading $REGION"
+  wget -qO "$PBF_FILE" "$PBF_URL"
+else
+  echo "Using existing $PBF_FILE"
+fi
+
+# 6) Define layer filters
+admin_filter="nwr/boundary=administrative"
+maritime_filter="nwr/boundary=maritime"
+coastline_filter="nwr/natural=coastline"
+water_filter="nwr/natural=water,natural=bay"
+landuse_filter="nwr/landuse=*"
+seamark_filter="nwr/seamark:type=*"
+harbor_filter="nwr/harbour=* nwr/man_made=pier,breakwater"
+fishing_filter="nwr/fishing=crab"
+islands_filter="nwr/place=island"
+
+echo "🦀 Processing region: $REGION"
+
+# 7) Extract & export each layer
+for layer in admin maritime coastline water landuse seamark harbor fishing islands; do
+  echo "  • ${layer}"
+  
+  # Get the correct filter based on layer name
+  filter_var="${layer}_filter"
+  filter_value="${!filter_var}"
+  
+  # Handle complex filter expressions by writing to a temp file
+  filter_file=$(mktemp)
+  echo "$filter_value" > "$filter_file"
+  
+  osmium tags-filter \
+    "${PBF_FILE}" \
+    --expressions="$filter_file" \
+    -o "${PBF_LAYERS}/${layer}.osm.pbf"
+    
+  rm "$filter_file"
+
+  osmium export \
+    -f geojson \
+    "${PBF_LAYERS}/${layer}.osm.pbf" \
+    -o "${GEOJSON_LAYERS}/${layer}.geojson"
+done
+
+# 8) Collect non-empty GeoJSONs
+valid_geojsons=()
+while IFS= read -r file; do
+  valid_geojsons+=("$file")
+done < <(find "${GEOJSON_LAYERS}" -name '*.geojson' -print0 | xargs -0 grep -l '"features":\s*\[' || true)
+
+# 9) Build MBTiles if any layers present
+if (( ${#valid_geojsons[@]} )); then
+  echo "Generating MBTiles for ${REGION}..."
+  cmd=( tippecanoe -o "${MBTILES_FILE}" -zg --drop-densest-as-needed )
+  for geo in "${valid_geojsons[@]}"; do
+    name="$(basename "${geo}" .geojson)"
+    cmd+=( -l "${name}" "${geo}" )
+  done
+  "${cmd[@]}"
+  echo "✅ ${MBTILES_FILE} created."
+
+  # 10) Create Tileserver GL style configuration
+  echo "Creating Tileserver GL style configuration..."
+  cat > "$STYLE_FILE" << EOF
+{
+  "version": 8,
+  "name": "${REGION} Style",
+  "sources": {
+    "${REGION}": {
+      "type": "vector",
+      "url": "mbtiles://${REGION}",
+      "minzoom": 0,
+      "maxzoom": 14
+    }
+  },
+  "sprite": "",
+  "glyphs": "fonts/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#f8f4f0"
+      }
+    }
+EOF
+
+  # Add a layer for each valid GeoJSON
+  for geo in "${valid_geojsons[@]}"; do
+    name="$(basename "$geo" .geojson)"
+    cat >> "$STYLE_FILE" << EOF
+    ,
+    {
+      "id": "${name}",
+      "type": "fill",
+      "source": "${REGION}",
+      "source-layer": "${name}",
+      "minzoom": 0,
+      "maxzoom": 14,
+      "paint": {
+        "fill-color": "#627BC1",
+        "fill-opacity": 0.5
+      }
+    }
+EOF
+  done
+
+  # Close the style configuration
+  echo "  ]" >> "$STYLE_FILE"
+  echo "}" >> "$STYLE_FILE"
+  echo "✅ Style configuration created at $STYLE_FILE"
+else
+  echo "⚠️  No valid GeoJSON layers; skipping MBTiles and style configuration."
+fi

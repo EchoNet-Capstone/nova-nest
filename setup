@@ -1,57 +1,254 @@
 #!/bin/bash
-REQUIRED_PKG="python3-venv"
+# Function to print verbose output
+verbose_echo() {
+    if [ $VERBOSE == 1 ]; then
+        echo "$1"
+    fi
+}
+
+my_prisma() {
+	cd $PROGRAM_DIR
+	CMD="prisma $@"
+	if [ $VERBOSE == 0 ]; then
+		CMD="$CMD > /dev/null"
+	fi
+	eval "$CMD"
+	cd $ROOT_DIR
+}
+
+# Default value for verbose mode (false)
+VERBOSE=0
+APT_QUIET="-qqq"
+GEN_QUIET="--quiet"
+
+# Parse command-line arguments for verbose flag
+for arg in "$@"; do
+    case $arg in
+        -v|--verbose)
+        VERBOSE=1
+		APT_QUIET=""
+		GEN_QUIET=""
+		PRISMA_QUIET=""
+        shift
+        ;;
+    esac
+done
+
+DOCKER="sudo docker"
+
+ROOT_DIR=$(pwd)
+PROGRAM_DIR="$ROOT_DIR/NestUi"
+SETUP_IN_DIR="$ROOT_DIR/setup_in"
+FLOC_DIR="$ROOT_DIR/nova-floc"
+
+REQ_PCKGS_FILE="$SETUP_IN_DIR/required_linux_packages.txt"
+POSS_LIBS_FILE="$SETUP_IN_DIR/possible_libs_not_found.txt"
+USR_SETUP_FILE="$SETUP_IN_DIR/postgres_burd_db_settings.txt"
+PY_PCKGS_FILE="$SETUP_IN_DIR/nestui_py_requirements.txt"
+
+GEN_FLOC_CLASSES_FILE="$FLOC_DIR/generate_scapy_clang.py"
+FLOC_HPP="$FLOC_DIR/floc.hpp"
+FLOC_PY="$PROGRAM_DIR/Utils/nest_floc.py"
+
+echo "Installing required packages..."
+
+# Make sure we are installing the latest packages
+sudo apt $APT_QUIET update
+
+# Installing dos2unix to make sure required-linux-packages is in the correct format.
+REQUIRED_PKG="dos2unix"
 
 PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
 
-echo Checking for $REQUIRED_PKG: $PKG_OK
+verbose_echo "Checking for $REQUIRED_PKG: $PKG_OK"
 if [ "" = "$PKG_OK" ]; then
-	echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
-	sudo apt --yes install $REQUIRED_PKG
+	verbose_echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
+	sudo apt $APT_QUIET --yes install $REQUIRED_PKG
 else
-	echo "$REQUIRED_PKG already installed! :)"
+	verbose_echo "$REQUIRED_PKG already installed! :)"
 fi
 
-#REQUIRED_PKG="qt6-qmake"
-#
-#PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
-#
-#echo Checking for $REQUIRED_PKG: $PKG_OK
-#if [ "" = "$PKG_OK" ]; then
-#	echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
-#	sudo apt --yes install $REQUIRED_PKG
-#
-#	if [ "" == $(echo $PATH | grep qmake)]; then
-#		echo "Setting path variable for qmake"
-#		export PATH = /usr/bin/qmake:$PATH
-#	fi
-#else
-#	echo "$REQUIRED_PKG already installed! :)"
-#fi
+dos2unix $GEN_QUIET $REQ_PCKGS_FILE
+dos2unix $GEN_QUIET $POSS_LIBS_FILE
 
+# Install required linux packages
+mapfile -t req_packages < "$REQ_PCKGS_FILE"
+
+for line in "${req_packages[@]}"; do
+	REQUIRED_PKG=$line
+
+	PKG_OK=$(dpkg-query -W --showformat='${Status}\n' "$REQUIRED_PKG"|grep "install ok installed")
+
+	verbose_echo "Checking for $REQUIRED_PKG: $PKG_OK"
+	if [ "" = "$PKG_OK" ]; then
+		verbose_echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
+		sudo apt --yes install "$REQUIRED_PKG"
+	else
+		verbose_echo "$REQUIRED_PKG already installed! :)"
+	fi
+done 
+
+echo "Checking for possible library naming errors..."
+
+mapfile -t lib_lines < "$POSS_LIBS_FILE"
+
+for line in "${lib_lines[@]}"; do
+	LIB_TO_FIND=$line
+
+	# Get the system architecture
+	SYS_ARCH=$(dpkg-architecture -qDEB_HOST_MULTIARCH)
+
+	# Construct the path to the lib
+	LIBS_DIR="/usr/lib/$SYS_ARCH/"
+
+	# Check if the directory exists
+	LIB_SEARCH=$(find "$LIBS_DIR" -name "${LIB_TO_FIND:0: -2}*")
+	if [ -n "$LIB_SEARCH" ]; then
+		verbose_echo "Base library exists: ${LIB_TO_FIND:0: -2}... checking version"
+		LIB_SEARCH=$(find "$LIBS_DIR" -name "$LIB_TO_FIND")
+
+		if [ -n "$LIB_SEARCH" ]; then
+			verbose_echo "Version matches :)"
+		else
+			verbose_echo "Version doesn't match, trying 1 version higher"
+			LIB_UP_ONE_TO_FIND=${LIB_TO_FIND:0:-1}$((${LIB_TO_FIND: -1} + 1))
+
+			LIB_SEARCH=$(find "$LIBS_DIR" -name "$LIB_UP_ONE_TO_FIND")
+
+			if [ -n "$LIB_SEARCH" ]; then
+				verbose_echo "One version higher found... adding symbolic link."
+				sudo ln "$LIBS_DIR"/"$LIB_UP_ONE_TO_FIND" "$LIBS_DIR"/"$LIB_TO_FIND"
+			else
+				verbose_echo "$LIB_UP_ONE_TO_FIND not found! Check that the base lib (${LIB_TO_FIND:0: -5}) is installed!"
+				exit 1
+			fi
+		fi 
+	else
+		verbose_echo "Base lib ${LIB_TO_FIND:0: -5} not found! Find the package it's included in and add it to $REQ_PCKGS_FILE"
+		exit 1
+	fi
+done
+
+echo "Setting up Tile Data..."
+
+verbose_echo "Setting up .env file..."
+
+DOT_ENV_FILE="$PROGRAM_DIR/.env"
+
+DB_USER=$(sed -n '2p' "$USR_SETUP_FILE")
+DB_PASS=$(sed -n '4p' "$USR_SETUP_FILE")
+DB_NAME=$(sed -n '6p' "$USR_SETUP_FILE")
+DB_PORT=$(sed -n '8p' "$USR_SETUP_FILE")
+
+echo "DATABASE_URL=\"postgresql://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME?schema=public\"" > $DOT_ENV_FILE
+echo "POSTGRES_USER=$DB_USER" >> $DOT_ENV_FILE
+echo "POSTGRES_PASSWORD=$DB_PASS" >> $DOT_ENV_FILE
+echo "POSTGRES_DB=$DB_NAME" >> $DOT_ENV_FILE
+echo "POSTGRES_PORT=$DB_PORT" >> $DOT_ENV_FILE
+
+# echo "Checking Docker daemon status..."
+
+# if ! docker info > /dev/null 2>&1; then
+#     verbose_echo "Docker daemon is not running. Attempting to start it..."
+#     sudo systemctl start docker
+
+#     if ! docker info > /dev/null 2>&1; then
+#         echo "❌ ERROR: Failed to start Docker daemon."
+#         echo "Make sure Docker is installed and your user is in the 'docker' group."
+#         exit 1
+#     fi
+
+#     verbose_echo "Docker daemon started successfully!"
+# else
+#     verbose_echo "Docker daemon is already running."
+# fi
+
+# # Ensure Docker starts on boot
+# sudo systemctl enable docker > /dev/null 2>&1
+
+echo "Checking for Docker Compose V2..."
+
+COMPOSE_VERSION=$($DOCKER compose version 2>/dev/null | grep -oE 'v([0-9]+\.)+[0-9]+' || echo "v0.0.0")
+
+if [[ "$COMPOSE_VERSION" < "v2.0.0" ]]; then
+    verbose_echo "Docker Compose V2 not found. Installing CLI plugin..."
+    
+	sudo mkdir -p /usr/local/lib/docker/cli-plugins
+	sudo curl -SL https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-linux-x86_64 \
+	-o /usr/local/lib/docker/cli-plugins/docker-compose
+
+	sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+    verbose_echo "Docker Compose V2 installed locally at ~/.docker/cli-plugins/docker-compose"
+else
+    verbose_echo "Docker Compose V2 already available: $COMPOSE_VERSION"
+fi
+
+verbose_echo "Starting Docker containers..."
+$DOCKER compose --env-file "$PROGRAM_DIR/.env" up -d
+
+verbose_echo "Waiting for Postgres to be ready..."
+until $DOCKER exec postgres pg_isready -U "$DB_USER" > /dev/null 2>&1; do
+  sleep 1
+done
+
+# Prompt to reset database
+PG_DB_EXIST=$($DOCKER exec -e PGPASSWORD="$DB_PASS" postgres psql -U "$DB_USER" -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'")
+CREATE_DB=0
+
+if [ "$PG_DB_EXIST" != "1" ]; then
+  verbose_echo "Database ($DB_NAME) not created!"
+  CREATE_DB=1
+else
+  PROMPT="Database ($DB_NAME) found! Would you like to reset the current database?"
+  echo "$PROMPT"
+  while true; do
+    read -rp "Enter \"Y\" or \"n/N\" (default): " input
+    if [[ "$input" == "Y" || "$input" =~ ^[nN]$  || "$input" == "" ]]; then
+      break
+    else
+      verbose_echo "Invalid input. Please enter \"Y\" or \"n/N\"."
+    fi
+  done
+
+  if [ "$input" == "Y" ]; then
+    verbose_echo "Resetting database ($DB_NAME)..."
+    $DOCKER exec -e PGPASSWORD="$DB_PASS" postgres dropdb -U "$DB_USER" "$DB_NAME"
+    CREATE_DB=1
+  fi
+fi
+
+if [ "$CREATE_DB" == "1" ]; then
+  verbose_echo "Creating database ($DB_NAME)..."
+  $DOCKER exec -e PGPASSWORD="$DB_PASS" postgres createdb -U "$DB_USER" "$DB_NAME"
+fi
+
+echo "Setting up python environment..."
+
+# Set up python environment
 python3 -m venv --clear env
 
+# shellcheck source=/dev/null
 source env/bin/activate
 
 # get python packages
-pip install -r requirements.txt
+pip install -r $PY_PCKGS_FILE $GEN_QUIET
 
-#pip install pyqt6 --config-settings --confirm-license= -vvv
-#
-# get pyqt requirements using apt
-#if [[ ("$OSTYPE" == "linux-gnu"*)]]; then
-#	REQUIRED_PKG="python3-pyqt6"
-#
-#	PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
-#
-#	echo Checking for $REQUIRED_PKG: $PKG_OK
-#	if [ "" = "$PKG_OK" ]; then
-#		echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
-#		sudo apt --yes install $REQUIRED_PKG
-#	else
-#		echo "$REQUIRED_PKG already installed! :)"
-#	fi
-#else
-#	echo "unsupported os! run on linux (for now)"
-#fi
+echo "Setting up prisma..."
+
+my_prisma generate
+
+MIGRATIONS_DIR="$PROGRAM_DIR/prisma/migrations"
+
+if [ $CREATE_DB == 1 ]; then
+	if [ -d $MIGRATIONS_DIR ]; then
+		verbose_echo "Removing migrations directory..."
+		rm -rf "$MIGRATIONS_DIR"
+	fi
+	verbose_echo "Migrating with prisma..."
+	my_prisma migrate dev --name init
+fi
 
 deactivate
+
+echo "Setup completed! :)"

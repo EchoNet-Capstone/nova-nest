@@ -1,0 +1,16 @@
+packaging
+pycparser
+pyserial
+pyside6
+folium
+geopandas
+matplotlib
+prisma
+scapy
+offline_folium
+setuptools
+pyqtlet2
+jinja2
+Flask
+folium-vectorgrid
+geocoder

@@ -1,0 +1,8 @@
+python3-venv
+libclang-dev
+docker
+jq
+tippecanoe
+osmium-tool
+wget
+unzip

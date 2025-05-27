@@ -1,0 +1,8 @@
+# Username
+nest_user
+# Password
+burdsFlyAway10
+# Database Name
+burd_db
+# Database Port
+5432

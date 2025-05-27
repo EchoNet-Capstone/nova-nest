@@ -4,7 +4,15 @@ if [[ ! -d "env" ]]; then
 	exit 1
 fi
 
+# check for postgres running
+PG_STATUS=$(sudo service postgresql status|grep "online")
+if [ "" == "$PG_STATUS" ]; then
+	verbose_echo "Postgresql not started... starting"
+	sudo service postgresql start
+fi
+
+# shellcheck source=/dev/null
 source env/bin/activate
 
-python3 -m NeST_UI
+python3 -m NestUi
 deactivate

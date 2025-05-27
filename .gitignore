@@ -1,6 +1,20 @@
+*.html
 .vscode
 *.code-workspace
+setup_out
+tiles
 
 #python stuff
-*.pyc
+__pycache__
 env
+
+#offline folium stuff
+map_dep
+
+#tile generation stuff
+tile-proc/*/
+tiles
+
+#prisma stuff
+.env
+migrations/

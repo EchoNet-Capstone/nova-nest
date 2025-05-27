@@ -1,0 +1,35 @@
+{
+    "alaska": "https://download.geofabrik.de/north-america/us/alaska-latest.osm.pbf",
+    "washington": "https://download.geofabrik.de/north-america/us/washington-latest.osm.pbf",
+    "oregon": "https://download.geofabrik.de/north-america/us/oregon-latest.osm.pbf",
+    "california": "https://download.geofabrik.de/north-america/us/california-latest.osm.pbf",
+    "maine": "https://download.geofabrik.de/north-america/us/maine-latest.osm.pbf",
+    "british-columbia": "https://download.geofabrik.de/north-america/canada/british-columbia-latest.osm.pbf",
+    "nova-scotia": "https://download.geofabrik.de/north-america/canada/nova-scotia-latest.osm.pbf",
+    "newfoundland-and-labrador": "https://download.geofabrik.de/north-america/canada/newfoundland-and-labrador-latest.osm.pbf",
+    "new-brunswick": "https://download.geofabrik.de/north-america/canada/new-brunswick-latest.osm.pbf",
+    "prince-edward-island": "https://download.geofabrik.de/north-america/canada/prince-edward-island-latest.osm.pbf",
+    "quebec": "https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf",
+  
+    "norway": "https://download.geofabrik.de/europe/norway-latest.osm.pbf",
+    "united-kingdom": "https://download.geofabrik.de/europe/great-britain-latest.osm.pbf",
+    "ireland": "https://download.geofabrik.de/europe/ireland-and-northern-ireland-latest.osm.pbf",
+    "russia-northwestern": "https://download.geofabrik.de/russia/northwestern-fed-district-latest.osm.pbf",
+  
+    "hokkaido": "https://download.geofabrik.de/asia/japan/hokkaido-latest.osm.pbf",
+    "jeju": "https://download.geofabrik.de/asia/south-korea-latest.osm.pbf",
+  
+    "guangdong": "https://download.geofabrik.de/asia/china/guangdong-latest.osm.pbf",
+    "fujian": "https://download.geofabrik.de/asia/china/fujian-latest.osm.pbf",
+    "zhejiang": "https://download.geofabrik.de/asia/china/zhejiang-latest.osm.pbf",
+    "shandong": "https://download.geofabrik.de/asia/china/shandong-latest.osm.pbf",
+    "tianjin": "https://download.geofabrik.de/asia/china/tianjin-latest.osm.pbf",
+  
+    "vietnam": "https://download.geofabrik.de/asia/vietnam-latest.osm.pbf",
+    "indonesia": "https://download.geofabrik.de/asia/indonesia-latest.osm.pbf",
+  
+    "queensland": "https://download.geofabrik.de/australia-oceania/australia/queensland-latest.osm.pbf",
+    "western-australia": "https://download.geofabrik.de/australia-oceania/australia/western-australia-latest.osm.pbf",
+    "northern-territory": "https://download.geofabrik.de/australia-oceania/australia/northern-territory-latest.osm.pbf"
+  }
+  
