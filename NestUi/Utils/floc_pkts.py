@@ -1,5 +1,15 @@
 # floc_pkts.py (VARIABLE LENGTH DATA)
-from scapy.all import *
+from scapy.packet import Packet, bind_layers
+from scapy.fields import (
+    BitField,
+    BitEnumField,
+    ShortField,
+    ByteField,
+    PacketField,
+    StrLenField,
+    ConditionalField
+)
+from scapy.compat import raw
 
 FLOC_DATA_TYPE = 'FLOC_DATA_TYPE'
 FLOC_COMMAND_TYPE = 'FLOC_COMMAND_TYPE'

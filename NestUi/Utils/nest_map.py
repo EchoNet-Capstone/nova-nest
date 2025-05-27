@@ -1,11 +1,7 @@
-import geopandas as gpd
 import requests
 import socket
-from shapely.geometry import Point
-import folium
-from folium.plugins import MarkerCluster, BeautifyIcon
+from pyqtlet2 import L
 from ..Utils.nest_db import *
-
 
 ########################################
 # EarthRanger Data Functions
@@ -35,10 +31,10 @@ def is_connected():
         return False
 
 def get_buoys(lat=39.7749, lon=-120.4194, state=None, updated_since=None, page=1, page_size=25):
-    """Fetch data from EarthRanger API and return as a GeoDataFrame."""
+    """Fetch data from EarthRanger API and return as a list of markers."""
     if not is_connected():
         print("No internet connection. Please connect and try again.")
-        return gpd.GeoDataFrame()
+        return []
 
     BASE_URL = "https://buoy.pamdas.org/api/v1.0/gear/"
     TOKEN = "CVuqlvvFPsTkZ9nVlrk3o0kMY59MxC"
@@ -48,7 +44,6 @@ def get_buoys(lat=39.7749, lon=-120.4194, state=None, updated_since=None, page=1
         "Accept": "application/json",
     }
 
-    # Construct query parameters
     params = {
         "lat": lat,
         "lon": lon,
@@ -65,95 +60,45 @@ def get_buoys(lat=39.7749, lon=-120.4194, state=None, updated_since=None, page=1
         print("Status Code:", response.status_code)
         if response.status_code != 200:
             print(f"Error: {response.status_code} - {response.text}")
-            return gpd.GeoDataFrame()
+            return []
 
         data = response.json()
-        features = []
+        markers = []
 
         for item in data.get('results', []):
             location = item.get("location")
             if location and isinstance(location, dict) and "latitude" in location and "longitude" in location:
-                features.append({
-                    "id": item.get("id"),
-                    "subject": item.get("subject", "Unknown"),
-                    "geometry": Point(location["longitude"], location["latitude"])
-                })
+                marker = L.marker(
+                    [location["latitude"], location["longitude"]],
+                    {
+                        'buoy_id': item.get("id"),
+                        'title': item.get("subject", "Unknown"),
+                        'color': 'green'  # Default color for EarthRanger buoys
+                    }
+                )
+                markers.append(marker)
 
-        if features:
-            gdf = gpd.GeoDataFrame(features, crs="EPSG:4326")
-            return gdf
-        else:
-            print("No valid geometries found in the data.")
-            return gpd.GeoDataFrame()
+        return markers
 
     except Exception as e:
         print("Error fetching data:", str(e))
-        return gpd.GeoDataFrame()
-
-########################################
-# Map Setup and Plugin Integration
-########################################
-
-def setup_map():
-    """
-    Create and return a folium map with:
-      - OpenStreetMap tile layer (with attribution)
-      - MousePosition to display current coordinates
-      - ClickForLatLng plugin to copy coordifnates to the clipboard.
-    
-    The ClickForLatLng plugin is configured with a format string that outputs 
-    the coordinates as a list (e.g., [lat, lng]) and with alert=True.
-    """
-    # Center map at a default location (e.g., [0, 0]). Adjust zoom as needed.
-    m = folium.Map(location=[0, 0], zoom_start=5, control_scale=True)
-    
-    return m
-
-def add_events_to_map(m, gdf):
-    if gdf.empty:
-        print("No buoys to add to the map.")
-        return
-
-    marker_cluster = MarkerCluster().add_to(m)  # Cluster markers to optimize rendering
-
-    for _, row in gdf.iterrows():
-        buoy_id = row.get("id", "Unknown")
-        lat, lng = row.geometry.y, row.geometry.x
-
-        popup_text = f"Buoy ID: {buoy_id}"
-
-        marker = folium.Marker(
-            location=[lat, lng],
-            popup=popup_text
-        )
-
-        marker.add_to(marker_cluster)
-
-    return m
+        return []
 
 def get_buoys_from_db():
-    # Retrieve buoy records from the database via Prisma.
-    # list_buoys() is decorated to run synchronously.
+    """Retrieve buoy records from the database and return as PyQtlet2 markers."""
     buoy_records = list_buoys()
-    
     markers = []
+    
     if not buoy_records:
         print("No buoys found in the database.")
         return markers
 
     for buoy in buoy_records:
-        # Access attributes using dot notation
         lat = buoy.lat
-        lon = buoy.long  # Assuming the attribute name is 'long'
+        lon = buoy.long
         buoy_id = buoy.buoy_id
         battery = getattr(buoy, 'battery', "N/A")
         drop_time = getattr(buoy, 'drop_time', "Unknown")
-        
-        popup_text = (
-            f"Buoy ID: {buoy_id}<br>"
-            f"Battery: {battery}<br>"
-            f"Drop Time: {drop_time}"
-        )
 
         # Determine icon color based on battery level
         try:
@@ -171,20 +116,14 @@ def get_buoys_from_db():
         else:
             color = 'green'
 
-        # Create a beautified icon for buoy markers with color based on battery level
-        icon = BeautifyIcon(
-            icon='info-sign', 
-            border_width= 1,
-            border_color='black', 
-            text_color=color, 
-            background_color=color
-        )
-
-        marker = folium.Marker(
-            location=[lat, lon],
-            popup=popup_text,
-            tooltip="Click for details",
-            icon=icon
+        # Create marker with color information
+        marker = L.marker(
+            [lat, lon],
+            {
+                'buoy_id': buoy_id,
+                'title': f"Buoy ID: {buoy_id}\nBattery: {battery}\nDrop Time: {drop_time}",
+                'color': color
+            }
         )
         markers.append(marker)
 

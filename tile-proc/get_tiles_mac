@@ -43,50 +43,59 @@ else
 fi
 
 # 6) Define layer filters
-declare -A layer_filters=(
-  [admin]="nwr/boundary=administrative"
-  [maritime]="nwr/boundary=maritime"
-  [coastline]="nwr/natural=coastline"
-  [water]="nwr/natural=water,natural=bay"
-  [landuse]="nwr/landuse=*"
-  [seamark]="nwr/seamark:type=*"
-  [harbor]="nwr/harbour=* nwr/man_made=pier,breakwater"
-  [fishing]="nwr/fishing=crab"
-  [islands]="nwr/place=island"
-)
+admin_filter="nwr/boundary=administrative"
+maritime_filter="nwr/boundary=maritime"
+coastline_filter="nwr/natural=coastline"
+water_filter="nwr/natural=water,natural=bay"
+landuse_filter="nwr/landuse=*"
+seamark_filter="nwr/seamark:type=*"
+harbor_filter="nwr/harbour=* nwr/man_made=pier,breakwater"
+fishing_filter="nwr/fishing=crab"
+islands_filter="nwr/place=island"
 
 echo "🦀 Processing region: $REGION"
 
 # 7) Extract & export each layer
-for layer in "${!layer_filters[@]}"; do
-  echo "  • $layer"
+for layer in admin maritime coastline water landuse seamark harbor fishing islands; do
+  echo "  • ${layer}"
+  
+  # Get the correct filter based on layer name
+  filter_var="${layer}_filter"
+  filter_value="${!filter_var}"
+  
+  # Handle complex filter expressions by writing to a temp file
+  filter_file=$(mktemp)
+  echo "$filter_value" > "$filter_file"
+  
   osmium tags-filter \
-    "$PBF_FILE" \
-    ${layer_filters[$layer]} \
-    -o "$PBF_LAYERS/${layer}.osm.pbf"
+    "${PBF_FILE}" \
+    --expressions="$filter_file" \
+    -o "${PBF_LAYERS}/${layer}.osm.pbf"
+    
+  rm "$filter_file"
 
   osmium export \
     -f geojson \
-    "$PBF_LAYERS/${layer}.osm.pbf" \
-    -o "$GEOJSON_LAYERS/${layer}.geojson"
+    "${PBF_LAYERS}/${layer}.osm.pbf" \
+    -o "${GEOJSON_LAYERS}/${layer}.geojson"
 done
 
 # 8) Collect non-empty GeoJSONs
-mapfile -t valid_geojsons < <(
-  find "$GEOJSON_LAYERS" -name '*.geojson' -print0 |
-  xargs -0 grep -l '"features":\s*\[' || true
-)
+valid_geojsons=()
+while IFS= read -r file; do
+  valid_geojsons+=("$file")
+done < <(find "${GEOJSON_LAYERS}" -name '*.geojson' -print0 | xargs -0 grep -l '"features":\s*\[' || true)
 
 # 9) Build MBTiles if any layers present
 if (( ${#valid_geojsons[@]} )); then
-  echo "Generating MBTiles for $REGION…"
-  cmd=( tippecanoe -o "$MBTILES_FILE" -zg --drop-densest-as-needed )
+  echo "Generating MBTiles for ${REGION}..."
+  cmd=( tippecanoe -o "${MBTILES_FILE}" -zg --drop-densest-as-needed )
   for geo in "${valid_geojsons[@]}"; do
-    name="$(basename "$geo" .geojson)"
-    cmd+=( -l "$name" "$geo" )
+    name="$(basename "${geo}" .geojson)"
+    cmd+=( -l "${name}" "${geo}" )
   done
   "${cmd[@]}"
-  echo "✅ $MBTILES_FILE created."
+  echo "✅ ${MBTILES_FILE} created."
 
   # 10) Create Tileserver GL style configuration
   echo "Creating Tileserver GL style configuration..."

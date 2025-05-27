@@ -52,7 +52,7 @@ echo "Installing required packages..."
 # Update Homebrew package lists
 brew update
 
-# Ensure dos2unix is installed (it’s available via Homebrew)
+# Ensure dos2unix is installed (it's available via Homebrew)
 if ! brew ls --versions dos2unix > /dev/null; then
     verbose_echo "dos2unix not found. Installing dos2unix."
     brew install dos2unix
@@ -104,7 +104,7 @@ done
 #             fi
 #         fi 
 #     else
-#         verbose_echo "Base lib $base_lib not found! Find the package it’s included in and add it to $REQ_PCKGS_FILE"
+#         verbose_echo "Base lib $base_lib not found! Find the package it's included in and add it to $REQ_PCKGS_FILE"
 #         exit 1
 #     fi
 # done
@@ -127,36 +127,104 @@ if ! pg_isready > /dev/null 2>&1; then
 fi
 verbose_echo "PostgreSQL started! :)"
 
-## Set up PostgreSQL server and database
+# Ensure Docker is installed
+if ! brew ls --versions docker > /dev/null; then
+    verbose_echo "Docker not found. Installing..."
+    brew install docker
+else
+    verbose_echo "Docker already installed! :)"
+fi
+
+# Ensure Docker Compose is installed
+if ! brew ls --versions docker-compose > /dev/null; then
+    verbose_echo "Docker Compose not found. Installing..."
+    brew install docker-compose
+else
+    verbose_echo "Docker Compose already installed! :)"
+fi
+
+# Check if Docker daemon is running
+if ! docker info > /dev/null 2>&1; then
+    verbose_echo "Docker daemon is not running. Starting Docker Desktop..."
+    open -a Docker
+    # Wait for Docker to start
+    while ! docker info > /dev/null 2>&1; do
+        sleep 1
+    done
+    verbose_echo "Docker daemon started successfully!"
+else
+    verbose_echo "Docker daemon is already running."
+fi
+
+# Setting up .env file for Docker Compose
+verbose_echo "Setting up .env file..."
+
+DOT_ENV_FILE="$PROGRAM_DIR/.env"
+
 DB_USER=$(sed -n '2p' "$USR_SETUP_FILE")
 DB_PASS=$(sed -n '4p' "$USR_SETUP_FILE")
 DB_NAME=$(sed -n '6p' "$USR_SETUP_FILE")
+DB_PORT=$(sed -n '8p' "$USR_SETUP_FILE")
 
-# Connect to the default "postgres" database to run administrative queries.
-DB_PORT=$(psql -d postgres -t -c "SHOW port;" | xargs)
+echo "DATABASE_URL=\"postgresql://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME?schema=public\"" > $DOT_ENV_FILE
+echo "POSTGRES_USER=$DB_USER" >> $DOT_ENV_FILE
+echo "POSTGRES_PASSWORD=$DB_PASS" >> $DOT_ENV_FILE
+echo "POSTGRES_DB=$DB_NAME" >> $DOT_ENV_FILE
+echo "POSTGRES_PORT=$DB_PORT" >> $DOT_ENV_FILE
 
-# Check if the database user exists
-PG_USR_EXIST=$(psql -d postgres -c '\du' | grep "$DB_USER")
-if [ -z "$PG_USR_EXIST" ]; then
-    verbose_echo "User $DB_USER not created! Creating user..."
-    createuser "$DB_USER"
-    psql -d postgres $GEN_QUIET -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';"
+# Start Docker containers
+verbose_echo "Starting Docker containers..."
+docker compose --env-file "$PROGRAM_DIR/.env" up -d
+
+verbose_echo "Waiting for Postgres to be ready..."
+# Use a timeout to prevent hanging indefinitely
+timeout=30
+while [[ $timeout -gt 0 ]]; do
+  if docker exec nova-nest-postgres-1 pg_isready -U "$DB_USER" > /dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+  timeout=$((timeout-1))
+done
+
+if [[ $timeout -eq 0 ]]; then
+  echo "Timed out waiting for PostgreSQL to start. Check Docker logs."
+  exit 1
+fi
+
+# Make sure local PostgreSQL is not interfering before we try to access Docker PostgreSQL
+brew services stop postgresql@14 2>/dev/null || true
+
+# Prompt to reset database
+PG_DB_EXIST=$(docker exec -e PGPASSWORD="$DB_PASS" nova-nest-postgres-1 psql -U "$DB_USER" -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" 2>/dev/null || echo "0")
+CREATE_DB=0
+
+if [[ "$PG_DB_EXIST" != "1" ]]; then
+  verbose_echo "Database ($DB_NAME) not created in Docker!"
+  CREATE_DB=1
 else
-    verbose_echo "User $DB_USER already exists! :)"
+  PROMPT="Database ($DB_NAME) found in Docker! Would you like to reset the current database?"
+  echo "$PROMPT"
+  while true; do
+    echo "Enter \"Y\" or \"n/N\" (default): "
+    read input
+    if [[ "$input" == "Y" || "$input" =~ ^[nN]$  || "$input" == "" ]]; then
+      break
+    else
+      verbose_echo "Invalid input. Please enter \"Y\" or \"n/N\"."
+    fi
+  done
+
+  if [[ "$input" == "Y" ]]; then
+    verbose_echo "Resetting database ($DB_NAME)..."
+    docker exec -e PGPASSWORD="$DB_PASS" nova-nest-postgres-1 psql -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS \"$DB_NAME\";" > /dev/null 2>&1
+    CREATE_DB=1
+  fi
 fi
 
-# Grant necessary permissions
-PG_USER_PERM=$(psql -d postgres -t -c "\du" | grep "$DB_USER" | grep "Create")
-if [ -z "$PG_USER_PERM" ]; then
-    verbose_echo "User $DB_USER doesn't have CREATEDB permission! Adding..."
-    psql -d postgres $GEN_QUIET -c "ALTER USER $DB_USER CREATEDB;"
-fi
-
-# Check if the target database exists
-PG_DB_EXIST=$(psql -d postgres -c "\l" | grep "$DB_NAME")
-if [ -z "$PG_DB_EXIST" ]; then
-    verbose_echo "Database ($DB_NAME) not created! Creating now..."
-    createdb -O "$DB_USER" "$DB_NAME"
+if [[ "$CREATE_DB" -eq 1 ]]; then
+  verbose_echo "Creating database ($DB_NAME) in Docker..."
+  docker exec -e PGPASSWORD="$DB_PASS" nova-nest-postgres-1 createdb -U "$DB_USER" "$DB_NAME" || true
 fi
 
 echo "Setting up Python environment..."
@@ -166,7 +234,7 @@ if ! brew ls --versions python@3.11 > /dev/null; then
     brew install python@3.11
 fi
 
-if [ -d env ]; then
+if [[ -d env ]]; then
     rm -rf env
 fi
 python3 -m venv env
@@ -176,11 +244,15 @@ pip install -r "$PY_PCKGS_FILE" $GEN_QUIET
 echo "Setting up Prisma..."
 DOT_ENV_FILE="$PROGRAM_DIR/.env"
 echo "DATABASE_URL=\"postgresql://$DB_USER:$DB_PASS@localhost:$DB_PORT/$DB_NAME?schema=public\"" > "$DOT_ENV_FILE"
+echo "POSTGRES_USER=$DB_USER" >> "$DOT_ENV_FILE"
+echo "POSTGRES_PASSWORD=$DB_PASS" >> "$DOT_ENV_FILE"
+echo "POSTGRES_DB=$DB_NAME" >> "$DOT_ENV_FILE"
+echo "POSTGRES_PORT=$DB_PORT" >> "$DOT_ENV_FILE"
 
 my_prisma generate
 
 MIGRATIONS_DIR="$PROGRAM_DIR/prisma/migrations"
-if [ ! -d "$MIGRATIONS_DIR" ]; then
+if [[ ! -d "$MIGRATIONS_DIR" ]]; then
     my_prisma migrate dev --name init
 fi
 
