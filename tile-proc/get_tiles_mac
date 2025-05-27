@@ -36,7 +36,7 @@ rm -rf "$PBF_LAYERS"/* "$GEOJSON_LAYERS"/*
 
 # 5) Download PBF if missing
 if [[ ! -f "$PBF_FILE" ]]; then
-  echo "Downloading $REGION…"
+  echo "Downloading $REGION"
   wget -qO "$PBF_FILE" "$PBF_URL"
 else
   echo "Using existing $PBF_FILE"
